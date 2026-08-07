@@ -1,6 +1,6 @@
 -- =============================================================================
 -- WhatsApp-First Salon Management System SaaS - Production Database Schema
--- Run this SINGLE SQL script in Supabase SQL Editor
+-- Run this SINGLE SQL script in Supabase SQL Editor (Idempotent & Safe to Re-run)
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS salons (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_salons_updated_at ON salons;
 CREATE TRIGGER trg_salons_updated_at
 BEFORE UPDATE ON salons
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -66,6 +67,7 @@ CREATE TABLE IF NOT EXISTS customers (
     UNIQUE (salon_id, whatsapp_number)
 );
 
+DROP TRIGGER IF EXISTS trg_customers_updated_at ON customers;
 CREATE TRIGGER trg_customers_updated_at
 BEFORE UPDATE ON customers
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -94,6 +96,7 @@ CREATE TABLE IF NOT EXISTS barbers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_barbers_updated_at ON barbers;
 CREATE TRIGGER trg_barbers_updated_at
 BEFORE UPDATE ON barbers
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -127,6 +130,7 @@ CREATE TABLE IF NOT EXISTS services (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_services_updated_at ON services;
 CREATE TRIGGER trg_services_updated_at
 BEFORE UPDATE ON services
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -164,6 +168,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_bookings_updated_at ON bookings;
 CREATE TRIGGER trg_bookings_updated_at
 BEFORE UPDATE ON bookings
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -195,7 +200,7 @@ CREATE TABLE IF NOT EXISTS barber_leaves (
 );
 
 -- -----------------------------------------------------------------------------
--- 7. WhatsApp Live Log & Bot Conversation Tracking
+-- 7. WhatsApp Live Log & Persistent Conversation Memory Engine
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS whatsapp_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -220,17 +225,66 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
 
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_from_to ON whatsapp_messages(from_number, to_number);
 
--- Conversation state tracking for WhatsApp NLU Bot
+-- Persistent Conversation Memory Engine State
 CREATE TABLE IF NOT EXISTS user_conversation_data (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     from_number TEXT NOT NULL,
     to_number TEXT NOT NULL,
+    conversation_id TEXT,
+    active_flow TEXT NOT NULL DEFAULT 'WELCOME',
+    current_step TEXT NOT NULL DEFAULT 'MAIN_MENU',
+    previous_step TEXT,
+    draft_booking JSONB NOT NULL DEFAULT '{}'::jsonb,
+    last_user_message TEXT,
+    last_bot_message TEXT,
+    flow_status TEXT NOT NULL DEFAULT 'active',
     current_stage TEXT NOT NULL DEFAULT 'DISCOVERY',
     collected_info JSONB NOT NULL DEFAULT '{}'::jsonb,
     first_message_sent BOOLEAN NOT NULL DEFAULT FALSE,
+    last_interaction_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (from_number, to_number)
 );
+
+-- Safely add missing columns to user_conversation_data if table already exists
+DO $$ 
+BEGIN 
+    BEGIN
+        ALTER TABLE user_conversation_data ADD COLUMN conversation_id TEXT;
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE user_conversation_data ADD COLUMN active_flow TEXT NOT NULL DEFAULT 'WELCOME';
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE user_conversation_data ADD COLUMN current_step TEXT NOT NULL DEFAULT 'MAIN_MENU';
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE user_conversation_data ADD COLUMN previous_step TEXT;
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE user_conversation_data ADD COLUMN draft_booking JSONB NOT NULL DEFAULT '{}'::jsonb;
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE user_conversation_data ADD COLUMN last_user_message TEXT;
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE user_conversation_data ADD COLUMN last_bot_message TEXT;
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE user_conversation_data ADD COLUMN flow_status TEXT NOT NULL DEFAULT 'active';
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE user_conversation_data ADD COLUMN last_interaction_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+END $$;
 
 -- Phone to Document & Auth Token Mapping (With Dynamic Webhook Support)
 CREATE TABLE IF NOT EXISTS phone_document_mapping (
@@ -253,6 +307,26 @@ CREATE TABLE IF NOT EXISTS phone_document_mapping (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Safely add missing columns to phone_document_mapping if table already exists
+DO $$ 
+BEGIN 
+    BEGIN
+        ALTER TABLE phone_document_mapping ADD COLUMN webhook_id TEXT;
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE phone_document_mapping ADD COLUMN webhook_secret TEXT;
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE phone_document_mapping ADD COLUMN webhook_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+    BEGIN
+        ALTER TABLE phone_document_mapping ADD COLUMN user_id UUID;
+    EXCEPTION WHEN duplicate_column THEN NULL; END;
+END $$;
 
 -- -----------------------------------------------------------------------------
 -- 8. Knowledge Base & Vector Documents (RAG)
