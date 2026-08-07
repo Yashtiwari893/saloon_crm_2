@@ -27,7 +27,13 @@ export async function sendWhatsAppMessage(
   origin: string
 ): Promise<boolean> {
   try {
-    const url = `${origin.replace(/\/$/, "")}/api/v1/send-message`;
+    const cleanOrigin = (origin && origin !== "demo-origin" && origin !== "https://your-salon-domain.com") 
+      ? origin 
+      : (process.env.WHATSAPP_ORIGIN || "https://api.11za.in");
+
+    const url = `${cleanOrigin.replace(/\/$/, "")}/api/v1/send-message`;
+    console.log(`[11za API] Sending WhatsApp reply to ${toPhone} via ${url}...`);
+
     const payload = {
       to: toPhone,
       type: "text",
@@ -43,13 +49,16 @@ export async function sendWhatsAppMessage(
       body: JSON.stringify(payload),
     });
 
+    const resText = await res.text();
+    console.log(`[11za API Result] Status: ${res.status}, Response: ${resText}`);
+
     if (!res.ok) {
-      console.error(`11za send API failed (${res.status}):`, await res.text());
+      console.error(`[11za API Error] (${res.status}): ${resText}`);
       return false;
     }
     return true;
   } catch (err) {
-    console.error("Failed to send WhatsApp message via 11za:", err);
+    console.error("[11za API Exception] Failed to send WhatsApp message:", err);
     return false;
   }
 }
@@ -72,10 +81,12 @@ export async function handleSalonAutoResponse(
   senderName?: string
 ): Promise<AutoResponseResult> {
   try {
-    console.log(`--- Starting Salon Auto-Response for ${fromNumber} -> ${toNumber} ---`);
+    console.log(`--- [Salon AI Auto-Responder] Processing message from ${fromNumber} to ${toNumber} ---`);
+    console.log(`Input Text: "${messageText}"`);
     const startTime = Date.now();
 
     if (await hasExistingAutoResponse(messageId)) {
+      console.log(`[Duplicate Check] Skipping messageId ${messageId} as already responded.`);
       await supabaseAdmin
         .from("whatsapp_messages")
         .update({
@@ -101,7 +112,7 @@ export async function handleSalonAutoResponse(
 
     const phoneMapping = mappingResult.data || {
       auth_token: process.env.WHATSAPP_AUTH_TOKEN || "demo-token",
-      origin: process.env.WHATSAPP_ORIGIN || "demo-origin",
+      origin: process.env.WHATSAPP_ORIGIN || "https://api.11za.in",
       system_prompt: "",
       gemini_api_key: process.env.GEMINI_API_KEY || "",
       groq_api_key: process.env.GROQ_API_KEY || "",
@@ -116,7 +127,7 @@ export async function handleSalonAutoResponse(
     // QUICK HANDLER 1: Interactive Main Menu Trigger ("Hi", "Hello", "Menu", "Hey")
     if (cleanMsg === "hi" || cleanMsg === "hello" || cleanMsg === "hey" || cleanMsg === "menu") {
       const menuText = 
-`Welcome to XYZ Salon ✨
+`Welcome to Velvety Salon ✨
 
 Please choose an option:
 1️⃣ Book Appointment
@@ -240,10 +251,10 @@ To cancel, reply 'Cancel Booking'.`;
     }
 
     try {
-      console.log("Generating response using Google Gemini 1.5 Flash...");
+      console.log("[AI Engine] Generating response using Google Gemini 1.5 Flash...");
       response = await tryGemini();
     } catch (errGemini) {
-      console.warn("Gemini API failed, falling back to Groq LLaMA 3.3:", errGemini);
+      console.warn("[AI Engine Warning] Gemini API failed, falling back to Groq LLaMA 3.3:", errGemini);
       try {
         response = await tryGroq("llama-3.3-70b-versatile");
       } catch (errGroq) {
@@ -255,6 +266,8 @@ To cancel, reply 'Cancel Booking'.`;
         }
       }
     }
+
+    console.log(`[AI Response Generated]: "${response}"`);
 
     if (auth_token && origin && response) {
       await sendWhatsAppMessage(fromNumber, response, auth_token, origin);
@@ -268,7 +281,7 @@ To cancel, reply 'Cancel Booking'.`;
       })
       .eq("message_id", messageId);
 
-    console.log(`Auto-response generated in ${Date.now() - startTime}ms`);
+    console.log(`Auto-response cycle completed in ${Date.now() - startTime}ms`);
     return { success: true, response, sent: true };
   } catch (err: any) {
     console.error("Error in handleSalonAutoResponse:", err);

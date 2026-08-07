@@ -119,8 +119,9 @@ export async function POST(req: Request) {
       }
     }
 
-    // Directly await Salon AI Auto-Responder execution in serverless function
-    if (messageText && (eventType === "MoMessage" || !payload.event)) {
+    // Execute Salon AI Auto-Responder for all inbound text messages
+    const isOutbound = eventType.toLowerCase() === "mtmessage" || eventType.toLowerCase() === "status";
+    if (messageText && !isOutbound) {
       console.log(`Executing Salon AI Auto-Responder for ${fromNumber}...`);
       const responseResult = await handleSalonAutoResponse(
         messageId,
