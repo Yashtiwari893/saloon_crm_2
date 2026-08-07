@@ -208,22 +208,10 @@ To cancel, reply 'Cancel Booking'.`;
       { role: "user" as const, content: messageText }
     ];
 
-    // Model Fallback Priority (Groq 70B -> Gemini -> Groq 8B)
+    // Model Execution Priority: PRIMARY = GOOGLE GEMINI 1.5 FLASH (Fallback = Groq LLaMA)
     let response = "";
     const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
     const groqKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
-
-    async function tryGroq(model: string) {
-      if (!groqKey) throw new Error("Groq API key not configured");
-      const localGroq = new Groq({ apiKey: groqKey });
-      const completion = await localGroq.chat.completions.create({
-        model: model,
-        messages,
-        temperature: 0.2,
-        max_tokens: 250,
-      });
-      return completion.choices[0].message.content || "";
-    }
 
     async function tryGemini() {
       if (!geminiKey) throw new Error("Gemini API key not configured");
@@ -239,12 +227,26 @@ To cancel, reply 'Cancel Booking'.`;
       return result.response.text();
     }
 
+    async function tryGroq(model: string) {
+      if (!groqKey) throw new Error("Groq API key not configured");
+      const localGroq = new Groq({ apiKey: groqKey });
+      const completion = await localGroq.chat.completions.create({
+        model: model,
+        messages,
+        temperature: 0.2,
+        max_tokens: 250,
+      });
+      return completion.choices[0].message.content || "";
+    }
+
     try {
-      response = await tryGroq("llama-3.3-70b-versatile");
-    } catch (err1) {
+      console.log("Generating response using Google Gemini 1.5 Flash...");
+      response = await tryGemini();
+    } catch (errGemini) {
+      console.warn("Gemini API failed, falling back to Groq LLaMA 3.3:", errGemini);
       try {
-        response = await tryGemini();
-      } catch (err2) {
+        response = await tryGroq("llama-3.3-70b-versatile");
+      } catch (errGroq) {
         try {
           response = await tryGroq("llama3-8b-8192");
         } catch (err3) {
