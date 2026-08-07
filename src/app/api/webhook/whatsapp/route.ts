@@ -1,21 +1,27 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { handleSalonAutoResponse, sendWhatsAppMessage } from "@/lib/autoResponder";
+import { handleSalonAutoResponse } from "@/lib/autoResponder";
 import { transcribeAudio } from "../../stt/mistral/route";
+import { logWebhookIncoming, logStep, logError } from "@/lib/logger";
 
 export async function POST(req: Request) {
+  const startTime = Date.now();
   try {
     const rawBody = await req.text();
-    console.log("=== INCOMING WHATSAPP WEBHOOK BODY ===");
-    console.log(rawBody);
-
     let payload: any = {};
     try {
       payload = JSON.parse(rawBody);
     } catch (e) {
-      console.error("Failed to parse JSON body:", e);
+      logError("Webhook JSON Parse Error", { rawBody, error: e });
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
+
+    const headers: Record<string, string> = {};
+    req.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    logWebhookIncoming(req.method, req.url, headers, payload);
 
     // Flexible extraction to support 11za, Meta Cloud API, WATI, & Baileys formats
     const messageId =
@@ -57,7 +63,7 @@ export async function POST(req: Request) {
 
     const eventType = payload.event || payload.event_type || "MoMessage";
 
-    console.log("Extracted Webhook Fields:", {
+    logStep("EXTRACTED_WEBHOOK_FIELDS", {
       messageId,
       fromNumber,
       toNumber,
@@ -67,7 +73,7 @@ export async function POST(req: Request) {
     });
 
     if (!fromNumber || !toNumber) {
-      console.warn("Webhook missing from/to numbers. Ignoring or logging only.");
+      logError("Webhook Missing Phone Numbers", { fromNumber, toNumber, payload });
       return NextResponse.json(
         { message: "Logged payload but missing phone numbers", payload },
         { status: 200 }
@@ -89,12 +95,13 @@ export async function POST(req: Request) {
       raw_payload: payload,
     };
 
+    logStep("SUPABASE_MESSAGE_LOGGING", messageRecord);
     const { error: upsertErr } = await supabaseAdmin
       .from("whatsapp_messages")
       .upsert(messageRecord, { onConflict: "message_id" });
 
     if (upsertErr) {
-      console.error("Error logging message to Supabase:", upsertErr);
+      logError("Supabase Message Upsert Error", upsertErr);
     }
 
     // Voice Message handling if audio/voice payload
@@ -104,25 +111,25 @@ export async function POST(req: Request) {
 
     if (isVoiceMessage && payload.content?.media?.url) {
       try {
-        console.log("Voice note detected. Transcribing audio via Mistral...");
+        logStep("VOICE_NOTE_TRANSCRIPTION_START", payload.content.media.url);
         const audioRes = await fetch(payload.content.media.url);
         if (audioRes.ok) {
           const audioBuffer = await audioRes.arrayBuffer();
           const sttResult = await transcribeAudio(audioBuffer, "voice.ogg");
           if (sttResult?.cleanedTranscript) {
             messageText = sttResult.cleanedTranscript;
-            console.log("Transcribed text:", messageText);
+            logStep("VOICE_NOTE_TRANSCRIPTION_SUCCESS", messageText);
           }
         }
       } catch (voiceErr) {
-        console.error("Voice transcription error:", voiceErr);
+        logError("Voice Transcription Error", voiceErr);
       }
     }
 
     // Execute Salon AI Auto-Responder for all inbound text messages
     const isOutbound = eventType.toLowerCase() === "mtmessage" || eventType.toLowerCase() === "status";
     if (messageText && !isOutbound) {
-      console.log(`Executing Salon AI Auto-Responder for ${fromNumber}...`);
+      logStep("EXECUTING_SALON_AI_AUTO_RESPONDER", { fromNumber, toNumber, messageText });
       const responseResult = await handleSalonAutoResponse(
         messageId,
         fromNumber,
@@ -131,7 +138,7 @@ export async function POST(req: Request) {
         senderName
       );
 
-      console.log("Auto-Responder Execution Result:", responseResult);
+      logStep("AUTO_RESPONDER_COMPLETE", { durationMs: Date.now() - startTime, result: responseResult });
 
       return NextResponse.json({
         success: true,
@@ -140,13 +147,14 @@ export async function POST(req: Request) {
       });
     }
 
+    logStep("WEBHOOK_PROCESSED_NO_RESPONSE_NEEDED", { eventType, isOutbound });
     return NextResponse.json({
       success: true,
       message: "Webhook processed",
       messageId,
     });
   } catch (err: any) {
-    console.error("Fatal Webhook Error:", err);
+    logError("Fatal Webhook Route Handler Error", err);
     return NextResponse.json({ error: err.message || "Webhook error" }, { status: 500 });
   }
 }
@@ -157,6 +165,8 @@ export async function GET(req: Request) {
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
+
+  logStep("WEBHOOK_GET_VERIFICATION", { mode, token, challenge });
 
   if (mode === "subscribe" && challenge) {
     console.log("Meta/11za Webhook URL verified successfully!");

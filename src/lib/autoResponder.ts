@@ -3,6 +3,8 @@ import { Groq } from "groq-sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { embedText } from "@/lib/embeddings";
 import { retrieveRelevantChunksForPhoneNumber } from "@/lib/retrieval";
+import { sendWhatsAppMessage } from "@/lib/whatsappSender";
+import { logHeader, logStep, logAiGeneration, logError } from "@/lib/logger";
 
 import {
   checkSlotAvailability,
@@ -20,57 +22,20 @@ export interface AutoResponseResult {
   noDocuments?: boolean;
 }
 
-export async function sendWhatsAppMessage(
-  toPhone: string,
-  text: string,
-  authToken: string,
-  origin: string
-): Promise<boolean> {
-  try {
-    const cleanOrigin = (origin && origin !== "demo-origin" && origin !== "https://your-salon-domain.com") 
-      ? origin 
-      : (process.env.WHATSAPP_ORIGIN || "https://api.11za.in");
-
-    const url = `${cleanOrigin.replace(/\/$/, "")}/api/v1/send-message`;
-    console.log(`[11za API] Sending WhatsApp reply to ${toPhone} via ${url}...`);
-
-    const payload = {
-      to: toPhone,
-      type: "text",
-      text: { body: text },
-    };
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const resText = await res.text();
-    console.log(`[11za API Result] Status: ${res.status}, Response: ${resText}`);
-
-    if (!res.ok) {
-      console.error(`[11za API Error] (${res.status}): ${resText}`);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[11za API Exception] Failed to send WhatsApp message:", err);
-    return false;
-  }
-}
+export { sendWhatsAppMessage };
 
 async function hasExistingAutoResponse(messageId: string): Promise<boolean> {
-  const { data } = await supabaseAdmin
-    .from("whatsapp_messages")
-    .select("id, auto_respond_sent")
-    .eq("message_id", messageId)
-    .maybeSingle();
+  try {
+    const { data } = await supabaseAdmin
+      .from("whatsapp_messages")
+      .select("id, auto_respond_sent")
+      .eq("message_id", messageId)
+      .maybeSingle();
 
-  return data?.auto_respond_sent ?? false;
+    return data?.auto_respond_sent ?? false;
+  } catch (e) {
+    return false;
+  }
 }
 
 export async function handleSalonAutoResponse(
@@ -80,13 +45,13 @@ export async function handleSalonAutoResponse(
   messageText: string,
   senderName?: string
 ): Promise<AutoResponseResult> {
+  const startTime = Date.now();
   try {
-    console.log(`--- [Salon AI Auto-Responder] Processing message from ${fromNumber} to ${toNumber} ---`);
-    console.log(`Input Text: "${messageText}"`);
-    const startTime = Date.now();
+    logHeader(`SALON AI AUTO-RESPONDER EXECUTING`);
+    logStep("AUTO_RESPONDER_INPUT", { messageId, fromNumber, toNumber, messageText, senderName });
 
     if (await hasExistingAutoResponse(messageId)) {
-      console.log(`[Duplicate Check] Skipping messageId ${messageId} as already responded.`);
+      logStep("DUPLICATE_CHECK", `MessageId ${messageId} already responded. Skipping.`);
       await supabaseAdmin
         .from("whatsapp_messages")
         .update({
@@ -119,8 +84,14 @@ export async function handleSalonAutoResponse(
       mistral_api_key: process.env.MISTRAL_API_KEY || "",
     };
 
-    const auth_token = phoneMapping.auth_token;
-    const origin = phoneMapping.origin;
+    const authToken = phoneMapping.auth_token || process.env.WHATSAPP_AUTH_TOKEN || "";
+    const originWebsite = phoneMapping.origin || process.env.WHATSAPP_ORIGIN || "https://api.11za.in";
+
+    logStep("11ZA_CREDENTIALS_RESOLVED", {
+      hasAuthToken: Boolean(authToken),
+      originWebsite,
+      hasGeminiKey: Boolean(phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY),
+    });
 
     const cleanMsg = messageText.trim().toLowerCase();
 
@@ -138,10 +109,13 @@ Please choose an option:
 
 Reply with a number or tell us what you'd like to do!`;
 
-      if (auth_token && origin) {
-        await sendWhatsAppMessage(fromNumber, menuText, auth_token, origin);
+      logStep("MENU_TRIGGER_RESPONSE", menuText);
+      let sentStatus = false;
+      if (authToken && originWebsite) {
+        const sendRes = await sendWhatsAppMessage(fromNumber, menuText, authToken, originWebsite);
+        sentStatus = sendRes.success;
       }
-      return { success: true, response: menuText, sent: true };
+      return { success: true, response: menuText, sent: sentStatus };
     }
 
     // QUICK HANDLER 2: "My Booking" or "5"
@@ -163,10 +137,13 @@ Total: ₹${booking.total_price}
 
 To cancel, reply 'Cancel Booking'.`;
       }
-      if (auth_token && origin) {
-        await sendWhatsAppMessage(fromNumber, replyText, auth_token, origin);
+      logStep("MY_BOOKING_TRIGGER_RESPONSE", replyText);
+      let sentStatus = false;
+      if (authToken && originWebsite) {
+        const sendRes = await sendWhatsAppMessage(fromNumber, replyText, authToken, originWebsite);
+        sentStatus = sendRes.success;
       }
-      return { success: true, response: replyText, sent: true };
+      return { success: true, response: replyText, sent: sentStatus };
     }
 
     // QUICK HANDLER 3: Cancel Booking
@@ -178,13 +155,17 @@ To cancel, reply 'Cancel Booking'.`;
       } else {
         replyText = cancelRes.error || "Aapki active booking nahi mili cancel karne ke liye.";
       }
-      if (auth_token && origin) {
-        await sendWhatsAppMessage(fromNumber, replyText, auth_token, origin);
+      logStep("CANCEL_BOOKING_TRIGGER_RESPONSE", replyText);
+      let sentStatus = false;
+      if (authToken && originWebsite) {
+        const sendRes = await sendWhatsAppMessage(fromNumber, replyText, authToken, originWebsite);
+        sentStatus = sendRes.success;
       }
       return { success: true, response: replyText, sent: true };
     }
 
     // 2. Fetch history & stage for LLM processing
+    logStep("FETCHING_CONTEXT_AND_HISTORY");
     const [queryEmbedding, historyResult, userStageData] = await Promise.all([
       embedText(messageText, 3, phoneMapping.mistral_api_key),
       supabaseAdmin
@@ -210,7 +191,6 @@ To cancel, reply 'Cancel Booking'.`;
     }));
 
     const systemPrompt = phoneMapping.system_prompt || `You are an AI Salon Assistant for Velvety Salon. Help customers book haircut, facial, beard spa appointments. Be polite, concise, and professional.`;
-
     const fullSystemPrompt = `${systemPrompt}\n\nContext Information:\n${contextText}\n\nCurrent User Stage: ${userStageData?.current_stage || "DISCOVERY"}`;
 
     const messages = [
@@ -250,27 +230,35 @@ To cancel, reply 'Cancel Booking'.`;
       return completion.choices[0].message.content || "";
     }
 
+    const aiStartTime = Date.now();
     try {
-      console.log("[AI Engine] Generating response using Google Gemini 1.5 Flash...");
+      logStep("TRYING_GEMINI_AI");
       response = await tryGemini();
+      logAiGeneration("gemini-1.5-flash", fullSystemPrompt, response, Date.now() - aiStartTime);
     } catch (errGemini) {
-      console.warn("[AI Engine Warning] Gemini API failed, falling back to Groq LLaMA 3.3:", errGemini);
+      logError("Gemini AI Exception", errGemini);
       try {
+        logStep("FALLBACK_TO_GROQ_70B");
         response = await tryGroq("llama-3.3-70b-versatile");
+        logAiGeneration("llama-3.3-70b-versatile", fullSystemPrompt, response, Date.now() - aiStartTime);
       } catch (errGroq) {
+        logError("Groq 70B Exception", errGroq);
         try {
           response = await tryGroq("llama3-8b-8192");
         } catch (err3) {
-          console.error("All LLM models failed:", err3);
+          logError("All AI Models Failed", err3);
           response = "Namaste! Aapke message ke liye dhanyawad. Hamare salon representative jaldi aapko reply karenge.";
         }
       }
     }
 
-    console.log(`[AI Response Generated]: "${response}"`);
-
-    if (auth_token && origin && response) {
-      await sendWhatsAppMessage(fromNumber, response, auth_token, origin);
+    let sendStatus = false;
+    if (authToken && originWebsite && response) {
+      logStep("SENDING_WHATSAPP_REPLY_VIA_11ZA", { to: fromNumber, responseLength: response.length });
+      const sendRes = await sendWhatsAppMessage(fromNumber, response, authToken, originWebsite);
+      sendStatus = sendRes.success;
+    } else {
+      logError("WhatsApp Send Skipped", { authTokenPresent: Boolean(authToken), originWebsite, responsePresent: Boolean(response) });
     }
 
     await supabaseAdmin
@@ -281,10 +269,10 @@ To cancel, reply 'Cancel Booking'.`;
       })
       .eq("message_id", messageId);
 
-    console.log(`Auto-response cycle completed in ${Date.now() - startTime}ms`);
-    return { success: true, response, sent: true };
+    logStep("AUTO_RESPONDER_SUCCESS", { totalDurationMs: Date.now() - startTime, sent: sendStatus });
+    return { success: true, response, sent: sendStatus };
   } catch (err: any) {
-    console.error("Error in handleSalonAutoResponse:", err);
+    logError("handleSalonAutoResponse Fatal Error", err);
     return { success: false, error: err.message || "Failed auto response", response: "" };
   }
 }
