@@ -1,91 +1,58 @@
 import { Mistral } from "@mistralai/mistralai";
 
-const defaultClient = new Mistral({
-    apiKey: process.env.MISTRAL_API_KEY!,
-});
+export async function embedText(text: string, retries = 1, customKey?: string | null): Promise<number[] | null> {
+  try {
+    const apiKey = (customKey && customKey.trim().length > 0) 
+      ? customKey.trim() 
+      : process.env.MISTRAL_API_KEY;
 
-function getClient(customKey?: string | null) {
-    if (customKey && customKey.trim().length > 0) {
-        return new Mistral({ apiKey: customKey.trim() });
+    if (!apiKey || apiKey === "demo-key" || apiKey === "your_mistral_api_key_here") {
+      console.warn("[Embeddings] No valid MISTRAL_API_KEY configured. Skipping vector search gracefully.");
+      return null;
     }
-    return defaultClient;
+
+    const client = new Mistral({ apiKey });
+    const response = await client.embeddings.create({
+      model: "mistral-embed",
+      inputs: [text],
+    });
+
+    const embedding = response.data[0]?.embedding;
+    if (!embedding || !Array.isArray(embedding)) {
+      return null;
+    }
+
+    return embedding;
+  } catch (error: any) {
+    console.warn("[Embeddings Non-Fatal Error] Mistral API failed:", error?.message || error);
+    return null;
+  }
 }
 
-export async function embedText(text: string, retries = 3, customKey?: string | null): Promise<number[]> {
-    const client = getClient(customKey);
-    for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-            const response = await client.embeddings.create({
-                model: "mistral-embed", // consistent with docs
-                inputs: [text],
-            });
+export async function embedBatch(texts: string[], retries = 1, customKey?: string | null): Promise<number[][]> {
+  try {
+    const apiKey = (customKey && customKey.trim().length > 0) 
+      ? customKey.trim() 
+      : process.env.MISTRAL_API_KEY;
 
-            const embedding = response.data[0]?.embedding;
-            if (!embedding || !Array.isArray(embedding)) {
-                throw new Error("Invalid embedding response from API");
-            }
-
-            return embedding; // array of 1024 floats
-        } catch (error: unknown) {
-            const isRateLimitError =
-                error &&
-                typeof error === "object" &&
-                "statusCode" in error &&
-                error.statusCode === 429;
-
-            if (isRateLimitError && attempt < retries) {
-                // Exponential backoff: wait 2^attempt seconds
-                const waitTime = Math.pow(2, attempt) * 1000;
-                console.log(
-                    `Rate limit hit. Retrying in ${waitTime / 1000}s (attempt ${attempt + 1}/${retries})...`
-                );
-                await new Promise((resolve) => setTimeout(resolve, waitTime));
-                continue;
-            }
-
-            // Re-throw if not a rate limit error or out of retries
-            throw error;
-        }
+    if (!apiKey || apiKey === "demo-key" || apiKey === "your_mistral_api_key_here") {
+      console.warn("[Embeddings] No valid MISTRAL_API_KEY for batch. Returning empty embeddings.");
+      return texts.map(() => []);
     }
 
-    throw new Error("Failed to generate embedding after retries");
-}
+    const client = new Mistral({ apiKey });
+    const response = await client.embeddings.create({
+      model: "mistral-embed",
+      inputs: texts,
+    });
 
-export async function embedBatch(texts: string[], retries = 3, customKey?: string | null): Promise<number[][]> {
-    const client = getClient(customKey);
-    for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-            // Mistral supports an array of strings for inputs
-            const response = await client.embeddings.create({
-                model: "mistral-embed",
-                inputs: texts,
-            });
-
-            if (!response.data || !Array.isArray(response.data)) {
-                throw new Error("Invalid embedding response from API");
-            }
-
-            // Ensure the ordering matches inputs, filter undefined
-            return response.data.map(d => d.embedding || []);
-        } catch (error: unknown) {
-            const isRateLimitError =
-                error &&
-                typeof error === "object" &&
-                "statusCode" in error &&
-                error.statusCode === 429;
-
-            if (isRateLimitError && attempt < retries) {
-                const waitTime = Math.pow(2, attempt) * 1000;
-                console.log(
-                    `Rate limit hit. Retrying in ${waitTime / 1000}s (attempt ${attempt + 1}/${retries})...`
-                );
-                await new Promise((resolve) => setTimeout(resolve, waitTime));
-                continue;
-            }
-
-            throw error;
-        }
+    if (!response.data || !Array.isArray(response.data)) {
+      return texts.map(() => []);
     }
 
-    throw new Error("Failed to generate batch embedding after retries");
+    return response.data.map(d => d.embedding || []);
+  } catch (error: any) {
+    console.warn("[Embeddings Non-Fatal Error] Mistral Batch API failed:", error?.message || error);
+    return texts.map(() => []);
+  }
 }

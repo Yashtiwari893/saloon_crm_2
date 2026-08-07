@@ -161,13 +161,19 @@ To cancel, reply 'Cancel Booking'.`;
         const sendRes = await sendWhatsAppMessage(fromNumber, replyText, authToken, originWebsite);
         sentStatus = sendRes.success;
       }
-      return { success: true, response: replyText, sent: true };
+      return { success: true, response: replyText, sent: sentStatus };
     }
 
-    // 2. Fetch history & stage for LLM processing
+    // 2. Safely Fetch history, stage & RAG embeddings without throwing
     logStep("FETCHING_CONTEXT_AND_HISTORY");
-    const [queryEmbedding, historyResult, userStageData] = await Promise.all([
-      embedText(messageText, 3, phoneMapping.mistral_api_key),
+    let queryEmbedding: number[] | null = null;
+    try {
+      queryEmbedding = await embedText(messageText, 1, phoneMapping.mistral_api_key);
+    } catch (embedErr) {
+      logError("Mistral Embeddings Non-Fatal Error", embedErr);
+    }
+
+    const [historyResult, userStageData] = await Promise.all([
       supabaseAdmin
         .from("whatsapp_messages")
         .select("content_text, event_type, from_number, to_number")
@@ -178,10 +184,14 @@ To cancel, reply 'Cancel Booking'.`;
     ]);
 
     let contextText = "";
-    if (queryEmbedding) {
-      const matches = await retrieveRelevantChunksForPhoneNumber(queryEmbedding, toNumber, 3);
-      if (matches && matches.length > 0) {
-        contextText = matches.map((m: any) => m.chunk).join("\n---\n");
+    if (queryEmbedding && Array.isArray(queryEmbedding) && queryEmbedding.length > 0) {
+      try {
+        const matches = await retrieveRelevantChunksForPhoneNumber(queryEmbedding, toNumber, 3);
+        if (matches && matches.length > 0) {
+          contextText = matches.map((m: any) => m.chunk).join("\n---\n");
+        }
+      } catch (ragErr) {
+        logError("RAG Retrieval Non-Fatal Error", ragErr);
       }
     }
 
