@@ -232,9 +232,13 @@ CREATE TABLE IF NOT EXISTS user_conversation_data (
     UNIQUE (from_number, to_number)
 );
 
--- Phone to Document & Auth Token Mapping
+-- Phone to Document & Auth Token Mapping (With Dynamic Webhook Support)
 CREATE TABLE IF NOT EXISTS phone_document_mapping (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID,
+    webhook_id TEXT,
+    webhook_secret TEXT,
+    webhook_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     phone_number TEXT NOT NULL UNIQUE,
     file_id UUID,
     file_ids UUID[] DEFAULT '{}',
@@ -244,6 +248,8 @@ CREATE TABLE IF NOT EXISTS phone_document_mapping (
     gemini_api_key TEXT,
     groq_api_key TEXT,
     mistral_api_key TEXT,
+    webhook_last_verified_at TIMESTAMPTZ,
+    webhook_last_received_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
