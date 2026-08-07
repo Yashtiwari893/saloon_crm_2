@@ -18,6 +18,7 @@ export interface NluParseResult {
     | "SELECT_DATE_TIME"
     | "CONFIRM_BOOKING"
     | "VIEW_MY_BOOKINGS"
+    | "VIEW_OFFERS"
     | "CANCEL_BOOKING"
     | "GLOBAL_COMMAND"
     | "RESUME_DECISION"
@@ -27,7 +28,7 @@ export interface NluParseResult {
 }
 
 /**
- * Parse incoming WhatsApp message for intent & extracted entities using Gemini Flash
+ * Parse incoming WhatsApp message for intent & extracted entities using Gemini Flash & Rule Interceptors
  */
 export async function parseUserMessageNlu(
   userMessage: string,
@@ -37,7 +38,7 @@ export async function parseUserMessageNlu(
 ): Promise<NluParseResult> {
   const clean = userMessage.trim().toLowerCase();
 
-  // Fast Rule-Based Interceptor for Common Quick Inputs
+  // Fast Rule-Based Interceptor for Navigation & Menu Options
   if (clean === "hi" || clean === "hello" || clean === "hey" || clean === "menu" || clean === "main menu") {
     return {
       intent: "GLOBAL_COMMAND",
@@ -62,7 +63,7 @@ export async function parseUserMessageNlu(
     };
   }
 
-  if (clean === "support" || clean === "talk to support" || clean === "help") {
+  if (clean.startsWith("4") || clean.includes("support") || clean.includes("talk to support") || clean.includes("help")) {
     return {
       intent: "GLOBAL_COMMAND",
       entities: { commandAction: "support" },
@@ -86,7 +87,8 @@ export async function parseUserMessageNlu(
     };
   }
 
-  if (clean === "1" || clean.includes("book appointment")) {
+  // OPTION 1: Book Appointment
+  if (clean.startsWith("1") || clean.includes("book appointment") || clean === "book") {
     return {
       intent: "START_BOOKING",
       entities: {},
@@ -94,7 +96,26 @@ export async function parseUserMessageNlu(
     };
   }
 
-  if (clean === "5" || clean.includes("my booking") || clean.includes("meri booking")) {
+  // OPTION 2: View Services Catalog
+  if (clean.startsWith("2") || clean.includes("service") || clean.includes("services") || clean.includes("catalog")) {
+    return {
+      intent: "SELECT_SERVICE",
+      entities: {},
+      confidence: 0.95,
+    };
+  }
+
+  // OPTION 3: Today's Special Offers
+  if (clean.startsWith("3") || clean.includes("offer") || clean.includes("discount") || clean.includes("deals")) {
+    return {
+      intent: "VIEW_OFFERS",
+      entities: {},
+      confidence: 0.95,
+    };
+  }
+
+  // OPTION 5: My Booking
+  if (clean.startsWith("5") || clean.includes("my booking") || clean.includes("meri booking")) {
     return {
       intent: "VIEW_MY_BOOKINGS",
       entities: {},
@@ -102,7 +123,7 @@ export async function parseUserMessageNlu(
     };
   }
 
-  // LLM NLU Entity Extractor via Gemini AI
+  // LLM NLU Entity Extractor via Gemini AI for Natural Text Queries
   const geminiKey = apiKey || process.env.GEMINI_API_KEY;
   if (!geminiKey) {
     return { intent: "GENERAL_CHAT", entities: {}, confidence: 0.5 };
@@ -118,7 +139,7 @@ Current Active Flow: ${currentFlow}, Current Step: ${currentStep}.
 
 Return strictly JSON format:
 {
-  "intent": "START_BOOKING" | "SELECT_SERVICE" | "SELECT_BARBER" | "SELECT_DATE_TIME" | "CONFIRM_BOOKING" | "VIEW_MY_BOOKINGS" | "CANCEL_BOOKING" | "GLOBAL_COMMAND" | "GENERAL_CHAT",
+  "intent": "START_BOOKING" | "SELECT_SERVICE" | "SELECT_BARBER" | "SELECT_DATE_TIME" | "CONFIRM_BOOKING" | "VIEW_MY_BOOKINGS" | "VIEW_OFFERS" | "CANCEL_BOOKING" | "GLOBAL_COMMAND" | "GENERAL_CHAT",
   "entities": {
     "serviceName": string or null,
     "barberName": string or null,

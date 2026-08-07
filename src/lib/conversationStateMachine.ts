@@ -20,6 +20,8 @@ export async function processStateMachineStep(
   userMessage: string,
   nlu: NluParseResult
 ): Promise<StateMachineResponse> {
+  const clean = userMessage.trim().toLowerCase();
+
   logStep("STATE_MACHINE_INPUT", {
     activeFlow: memory.activeFlow,
     currentStep: memory.currentStep,
@@ -102,7 +104,7 @@ Would you like to continue where you left off?
       memory.draftBooking = {};
       await saveConversationMemory(memory);
 
-      const restartText = `No problem! Starting fresh. What would you like to do?\n1️⃣ Book Appointment\n2️⃣ View Services`;
+      const restartText = `No problem! Starting fresh. What would you like to do?\n1️⃣ Book Appointment\n2️⃣ View Services Catalog`;
       return { replyText: restartText, nextMemory: memory };
     }
   }
@@ -146,11 +148,52 @@ To cancel, reply 'Cancel Booking'.`;
     return { replyText, nextMemory: memory };
   }
 
-  // 5. BOOKING FLOW CONTROLLER
+  // 5. VIEW OFFERS INTENT
+  if (nlu.intent === "VIEW_OFFERS") {
+    const offersText = 
+`🎉 Today's Special Offers & Packages:
+
+🌟 Royal Combo: Haircut + Beard Styling for ₹350 (Save ₹50!)
+🌟 Glow Package: Facial & Head Spa Massage @ ₹699
+🌟 Weekend Grooming: Haircut + Facial + Shave @ ₹799
+
+Reply '1' or 'Book' to reserve your offer slot!`;
+    return { replyText: offersText, nextMemory: memory };
+  }
+
+  // 6. VIEW SERVICES CATALOG INTENT
+  if (
+    nlu.intent === "SELECT_SERVICE" &&
+    memory.activeFlow === "WELCOME" &&
+    !memory.draftBooking.service
+  ) {
+    const { data: services } = await supabaseAdmin
+      .from("services")
+      .select("name, price, category")
+      .eq("is_active", true)
+      .limit(8);
+
+    let serviceList = "";
+    if (services && services.length > 0) {
+      serviceList = services.map((s, idx) => `${idx + 1}. ${s.name} - ₹${s.price}`).join("\n");
+    } else {
+      serviceList = "1. Haircut & Styling - ₹250\n2. Beard Trim & Styling - ₹150\n3. Royal Haircut + Beard Combo - ₹350\n4. Facial & Massage Spa - ₹499";
+    }
+
+    const replyText = 
+`✂️ Velvety Salon Services Catalog:
+
+${serviceList}
+
+Reply with a service name or reply '1' to book an appointment!`;
+    return { replyText, nextMemory: memory };
+  }
+
+  // 7. BOOKING FLOW CONTROLLER
   if (
     nlu.intent === "START_BOOKING" ||
     memory.activeFlow === "BOOKING_DRAFT" ||
-    nlu.intent === "SELECT_SERVICE" ||
+    (nlu.intent === "SELECT_SERVICE" && memory.activeFlow === "BOOKING_DRAFT") ||
     nlu.intent === "SELECT_BARBER" ||
     nlu.intent === "SELECT_DATE_TIME"
   ) {
@@ -158,7 +201,7 @@ To cancel, reply 'Cancel Booking'.`;
     return await continueBookingFlow(memory, userMessage, nlu);
   }
 
-  // DEFAULT / UNHANDLED: Ask Gemini or Re-prompt current step
+  // DEFAULT / UNHANDLED: Re-prompt current step or show main menu guidance
   return await handleFallbackResponse(memory, userMessage);
 }
 
@@ -231,7 +274,7 @@ Reply with service name or number!`;
     }
 
     const replyText = 
-`Great choice! Which Barber would you like? 💈${favNote}
+`Great choice! Which Barber would you like for your ${draft.service}? 💈${favNote}
 
 ${barberList}
 4. Anyone Available (First Open Slot)
@@ -328,13 +371,13 @@ async function handleFallbackResponse(
 
   let guidanceText = "";
   if (step === "SELECT_SERVICE") {
-    guidanceText = "I didn't quite understand that. Please select a service for your appointment:\n\n1. Haircut - ₹250\n2. Beard Trim - ₹150\n3. Royal Combo - ₹350";
+    guidanceText = "Please select a service for your appointment:\n\n1. Haircut & Styling - ₹250\n2. Beard Trim - ₹150\n3. Royal Combo - ₹350";
   } else if (step === "SELECT_BARBER") {
     guidanceText = `You're currently choosing a barber for ${memory.draftBooking.service || "your appointment"}.\n\nPlease choose:\n1. Rahul\n2. Sameer\n3. Anyone Available`;
   } else if (step === "SELECT_DATE_TIME") {
     guidanceText = `Please tell us what Date & Time works for you (e.g. 'Tomorrow 4 PM' or 'Today 6 PM')!`;
   } else {
-    guidanceText = `Namaste! How can I help you today?\n1️⃣ Book Appointment\n2️⃣ View Services\n3️⃣ Today's Offers\n4️⃣ Talk to Support`;
+    guidanceText = `Namaste! How can I help you today?\n1️⃣ Book Appointment\n2️⃣ View Services Catalog\n3️⃣ Today's Special Offers\n4️⃣ Talk to Support Manager`;
   }
 
   return { replyText: guidanceText, nextMemory: memory };
