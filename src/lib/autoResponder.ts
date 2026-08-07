@@ -95,7 +95,7 @@ export async function handleSalonAutoResponse(
 
     const cleanMsg = messageText.trim().toLowerCase();
 
-    // QUICK HANDLER 1: Interactive Main Menu Trigger ("Hi", "Hello", "Menu", "Hey")
+    // QUICK HANDLER 0: Interactive Main Menu Trigger ("Hi", "Hello", "Menu", "Hey")
     if (cleanMsg === "hi" || cleanMsg === "hello" || cleanMsg === "hey" || cleanMsg === "menu") {
       const menuText = 
 `Welcome to Velvety Salon ✨
@@ -118,7 +118,70 @@ Reply with a number or tell us what you'd like to do!`;
       return { success: true, response: menuText, sent: sentStatus };
     }
 
-    // QUICK HANDLER 2: "My Booking" or "5"
+    // QUICK HANDLER 1: "1" or "Book Appointment"
+    if (cleanMsg === "1" || cleanMsg === "book appointment" || cleanMsg.includes("book appointment")) {
+      const replyText = `To book an appointment, please reply with your preferred Barber & Date/Time (e.g. 'Rahul, Tomorrow 4 PM') or service name (e.g. 'Haircut & Beard Trim')! ✂️`;
+      logStep("OPTION_1_TRIGGER_RESPONSE", replyText);
+      let sentStatus = false;
+      if (authToken && originWebsite) {
+        const sendRes = await sendWhatsAppMessage(fromNumber, replyText, authToken, originWebsite);
+        sentStatus = sendRes.success;
+      }
+      return { success: true, response: replyText, sent: sentStatus };
+    }
+
+    // QUICK HANDLER 2: "2" or "View Services"
+    if (cleanMsg === "2" || cleanMsg === "view services" || cleanMsg.includes("view services")) {
+      const replyText = 
+`✂️ Velvety Salon Services Catalog:
+
+1. Haircut & Styling - ₹250
+2. Beard Trim & Styling - ₹150
+3. Royal Haircut + Beard Combo - ₹350
+4. Charcoal Deep Cleansing Facial - ₹499
+5. Head & Shoulder Spa Massage - ₹599
+
+Reply with service name or '1' to book!`;
+      logStep("OPTION_2_TRIGGER_RESPONSE", replyText);
+      let sentStatus = false;
+      if (authToken && originWebsite) {
+        const sendRes = await sendWhatsAppMessage(fromNumber, replyText, authToken, originWebsite);
+        sentStatus = sendRes.success;
+      }
+      return { success: true, response: replyText, sent: sentStatus };
+    }
+
+    // QUICK HANDLER 3: "3" or "Offers"
+    if (cleanMsg === "3" || cleanMsg.includes("offer") || cleanMsg.includes("discount")) {
+      const replyText = 
+`🎉 Today's Special Offers:
+
+🌟 Combo Offer: Haircut + Beard Trim for ₹350 (Save ₹50!)
+🌟 Mid-Week Glow: Facial + Head Massage @ ₹699
+
+Reply '1' to book your slot now!`;
+      logStep("OPTION_3_TRIGGER_RESPONSE", replyText);
+      let sentStatus = false;
+      if (authToken && originWebsite) {
+        const sendRes = await sendWhatsAppMessage(fromNumber, replyText, authToken, originWebsite);
+        sentStatus = sendRes.success;
+      }
+      return { success: true, response: replyText, sent: sentStatus };
+    }
+
+    // QUICK HANDLER 4: "4" or "Support"
+    if (cleanMsg === "4" || cleanMsg.includes("support") || cleanMsg.includes("talk to support")) {
+      const replyText = `📞 Salon Manager Support:\nOur salon representative is available at +91 9005300803. You can call directly or type your query here!`;
+      logStep("OPTION_4_TRIGGER_RESPONSE", replyText);
+      let sentStatus = false;
+      if (authToken && originWebsite) {
+        const sendRes = await sendWhatsAppMessage(fromNumber, replyText, authToken, originWebsite);
+        sentStatus = sendRes.success;
+      }
+      return { success: true, response: replyText, sent: sentStatus };
+    }
+
+    // QUICK HANDLER 5: "My Booking" or "5"
     if (cleanMsg === "5" || cleanMsg.includes("my booking") || cleanMsg.includes("meri booking")) {
       const booking = await getCustomerLatestBooking(fromNumber);
       let replyText = "";
@@ -146,7 +209,7 @@ To cancel, reply 'Cancel Booking'.`;
       return { success: true, response: replyText, sent: sentStatus };
     }
 
-    // QUICK HANDLER 3: Cancel Booking
+    // QUICK HANDLER 6: Cancel Booking
     if (cleanMsg.includes("cancel") || cleanMsg === "cancel booking") {
       const cancelRes = await cancelSalonBooking(fromNumber);
       let replyText = "";
@@ -209,15 +272,15 @@ To cancel, reply 'Cancel Booking'.`;
       { role: "user" as const, content: messageText }
     ];
 
-    // Model Execution Priority: PRIMARY = GOOGLE GEMINI 1.5 FLASH (Fallback = Groq LLaMA)
+    // Model Execution Priority: PRIMARY = GOOGLE GEMINI (Fallback = Groq LLaMA)
     let response = "";
     const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
     const groqKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
 
-    async function tryGemini() {
+    async function tryGeminiModel(modelName: string) {
       if (!geminiKey) throw new Error("Gemini API key not configured");
       const localGenAI = new GoogleGenerativeAI(geminiKey);
-      const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = localGenAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent({
         contents: messages.map(m => ({
           role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
@@ -243,8 +306,12 @@ To cancel, reply 'Cancel Booking'.`;
     const aiStartTime = Date.now();
     try {
       logStep("TRYING_GEMINI_AI");
-      response = await tryGemini();
-      logAiGeneration("gemini-1.5-flash", fullSystemPrompt, response, Date.now() - aiStartTime);
+      try {
+        response = await tryGeminiModel("gemini-1.5-flash-latest");
+      } catch (e1) {
+        response = await tryGeminiModel("gemini-1.5-pro");
+      }
+      logAiGeneration("gemini-ai", fullSystemPrompt, response, Date.now() - aiStartTime);
     } catch (errGemini) {
       logError("Gemini AI Exception", errGemini);
       try {
