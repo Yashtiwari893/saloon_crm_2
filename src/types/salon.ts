@@ -72,16 +72,16 @@ export interface Service {
   discountPrice?: number;
   imageUrl?: string;
   isPopular: boolean;
-  assignedBarberIds: string[];
+  assignedBarberIds?: string[];
   isActive: boolean;
 }
 
 export interface BookingService {
   id: string;
-  bookingId: string;
-  serviceId: string;
+  bookingId?: string;
+  serviceId?: string;
   serviceName: string;
-  durationMinutes: number;
+  durationMinutes?: number;
   price: number;
 }
 
@@ -94,7 +94,10 @@ export interface Booking {
   customerPhone: string;
   barberId: string;
   barberName: string;
-  barberAvatar?: string;
+  serviceId: string;
+  serviceName: string;
+  services?: BookingService[];
+  servicesList?: BookingService[];
   bookingDate: string; // YYYY-MM-DD
   startTime: string; // HH:mm
   endTime: string; // HH:mm
@@ -102,51 +105,19 @@ export interface Booking {
   totalPrice: number;
   status: BookingStatus;
   source: BookingSource;
-  services: BookingService[];
-  cancellationReason?: string;
-  whatsappMessageId?: string;
   notes?: string;
   createdAt: string;
 }
 
-export interface BarberLeave {
-  id: string;
-  barberId: string;
-  barberName: string;
-  leaveDate: string;
-  reason?: string;
-  status: 'pending' | 'approved' | 'rejected';
-}
-
 export interface SalonAnalytics {
-  totalBookings: number;
-  todayBookings: number;
-  upcomingBookings: number;
-  completedBookings: number;
-  cancelledBookings: number;
-  totalRevenue: number;
   todayRevenue: number;
+  todayBookingsCount: number;
   activeBarbersCount: number;
-  totalCustomersCount: number;
-  barberUtilization: { barberName: string; bookingCount: number; revenue: number; rating: number }[];
+  totalBarbersCount: number;
+  activeCustomersCount: number;
+  vipCustomersCount: number;
+  monthlyRevenueTotal: number;
   popularServices: { serviceName: string; count: number; revenue: number }[];
-  dailyRevenueTrend: { date: string; revenue: number; bookings: number }[];
-  peakHours: { hour: string; count: number }[];
-}
-
-export interface WhatsAppConversationLog {
-  id: string;
-  messageId: string;
-  fromNumber: string;
-  toNumber: string;
-  senderName: string;
-  contentType: string;
-  contentText: string;
-  rawTranscript?: string;
-  transcriptLanguage?: string;
-  eventType: 'MoMessage' | 'MtMessage';
-  isResponded: boolean;
-  createdAt: string;
 }
 
 export interface DashboardNotification {
@@ -156,5 +127,21 @@ export interface DashboardNotification {
   type: 'info' | 'booking' | 'cancellation' | 'reschedule' | 'alert';
   isRead: boolean;
   linkUrl?: string;
+  createdAt: string;
+}
+
+export interface WhatsAppConversationLog {
+  id: string;
+  salonId?: string;
+  messageId: string;
+  fromNumber: string;
+  toNumber: string;
+  senderName: string;
+  contentType: string;
+  contentText: string;
+  eventType: string;
+  isIn24Window: boolean;
+  autoRespondSent: boolean;
+  responseSentAt?: string;
   createdAt: string;
 }

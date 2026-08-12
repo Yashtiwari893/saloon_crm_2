@@ -45,7 +45,8 @@ export default function WhatsAppLogsPage() {
       contentType: "text",
       contentText: testInput,
       eventType: "MoMessage",
-      isResponded: true,
+      autoRespondSent: true,
+      isIn24Window: true,
       createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
@@ -61,7 +62,8 @@ export default function WhatsAppLogsPage() {
           ? "Booking Confirmed ✅\nService: Executive Haircut & Wash\nBarber: Rahul Sharma\nDate: Today\nTime: 5:30 PM\nThank You!"
           : "Welcome to Velvet Cut Salon! ✨ Please reply with 1️⃣ Book Appointment or 2️⃣ View Services.",
         eventType: "MtMessage",
-        isResponded: false,
+        autoRespondSent: false,
+        isIn24Window: true,
         createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 

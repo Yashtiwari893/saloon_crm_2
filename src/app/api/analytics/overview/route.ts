@@ -1,51 +1,41 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { getUserFromRequest } from "@/lib/authServer";
+import { resolveActiveSalonId } from "@/lib/salonStore";
 
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
     try {
-        const user = await getUserFromRequest(req);
-
-        const filesQuery = supabaseAdmin.from("rag_files").select("id", { count: "exact", head: true });
-        const chunksQuery = supabaseAdmin.from("rag_chunks").select("id", { count: "exact", head: true });
-        const botsQuery = supabaseAdmin.from("phone_document_mapping").select("phone_number");
-        const chatMessagesQuery = supabaseAdmin.from("messages").select("id", { count: "exact", head: true });
-        const waMessagesQuery = supabaseAdmin.from("whatsapp_messages").select("id", { count: "exact", head: true });
-
-        if (user) {
-            filesQuery.or(`user_id.eq.${user.id},user_id.is.null`);
-            chunksQuery.or(`user_id.eq.${user.id},user_id.is.null`);
-            botsQuery.or(`user_id.eq.${user.id},user_id.is.null`);
-            chatMessagesQuery.or(`user_id.eq.${user.id},user_id.is.null`);
-            waMessagesQuery.or(`user_id.eq.${user.id},user_id.is.null`);
-        }
+        const salonId = await resolveActiveSalonId();
 
         const [
-            filesResult,
-            chunksResult,
-            botsResult,
-            chatMessagesResult,
+            bookingsResult,
+            customersResult,
+            barbersResult,
+            servicesResult,
             waMessagesResult,
         ] = await Promise.all([
-            filesQuery,
-            chunksQuery,
-            botsQuery,
-            chatMessagesQuery,
-            waMessagesQuery,
+            supabaseAdmin.from("bookings").select("total_price, status").eq("salon_id", salonId),
+            supabaseAdmin.from("customers").select("id", { count: "exact", head: true }).eq("salon_id", salonId),
+            supabaseAdmin.from("barbers").select("id", { count: "exact", head: true }).eq("salon_id", salonId),
+            supabaseAdmin.from("services").select("id", { count: "exact", head: true }).eq("salon_id", salonId),
+            supabaseAdmin.from("whatsapp_messages").select("id", { count: "exact", head: true }).eq("salon_id", salonId),
         ]);
 
-        const botRows = (botsResult.data || []) as Array<{ phone_number: string | null }>;
-        const botCount = new Set(botRows.map((row) => row.phone_number).filter(Boolean)).size;
+        const bookings = bookingsResult.data || [];
+        const todayRevenue = bookings.reduce(
+            (acc, b) => acc + (b.status === "completed" ? Number(b.total_price || 0) : 0),
+            0
+        );
 
         return NextResponse.json({
             success: true,
             metrics: {
-                total_files: filesResult.count || 0,
-                total_chunks: chunksResult.count || 0,
-                active_bots: botCount,
-                web_chat_messages: chatMessagesResult.count || 0,
+                today_revenue: todayRevenue,
+                total_bookings: bookings.length,
+                total_customers: customersResult.count || 0,
+                active_barbers: barbersResult.count || 0,
+                active_services: servicesResult.count || 0,
                 whatsapp_messages: waMessagesResult.count || 0,
             },
         });

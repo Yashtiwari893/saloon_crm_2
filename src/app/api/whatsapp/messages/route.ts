@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseClient";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { resolveActiveSalonId } from "@/lib/salonStore";
 
 export async function GET(req: Request) {
     try {
@@ -7,10 +8,12 @@ export async function GET(req: Request) {
         const fromNumber = searchParams.get("from");
         const limit = parseInt(searchParams.get("limit") || "50");
         const offset = parseInt(searchParams.get("offset") || "0");
+        const salonId = await resolveActiveSalonId(searchParams.get("salon_id") || undefined);
 
-        let query = supabase
+        let query = supabaseAdmin
             .from("whatsapp_messages")
             .select("*")
+            .eq("salon_id", salonId)
             .order("received_at", { ascending: false })
             .range(offset, offset + limit - 1);
 
@@ -27,7 +30,7 @@ export async function GET(req: Request) {
 
         return NextResponse.json({
             success: true,
-            messages: data,
+            messages: data || [],
             count: data?.length || 0,
         });
     } catch (err: unknown) {

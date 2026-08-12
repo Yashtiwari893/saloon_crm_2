@@ -1,6 +1,6 @@
 -- =============================================================================
--- WhatsApp-First Salon Management System SaaS - Production Database Schema
--- Run this SINGLE SQL script in Supabase SQL Editor (Idempotent & Safe to Re-run)
+-- WhatsApp-First Salon Management System SaaS - Enterprise Multi-Tenant Schema
+-- Run this SINGLE SQL script in Supabase SQL Editor (100% Idempotent)
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -16,14 +16,18 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- -----------------------------------------------------------------------------
--- 1. Salons (Multi-Tenant SaaS Support)
+-- 1. Salons (Multi-Tenant SaaS Root Table)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS salons (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     slug TEXT UNIQUE NOT NULL,
+    login_id TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL DEFAULT 'salon123',
+    owner_name TEXT,
+    owner_phone TEXT,
     phone_number TEXT NOT NULL UNIQUE,
-    whatsapp_origin TEXT,
+    whatsapp_origin TEXT DEFAULT 'https://api.11za.in',
     whatsapp_auth_token TEXT,
     address TEXT,
     city TEXT,
@@ -32,6 +36,9 @@ CREATE TABLE IF NOT EXISTS salons (
     opening_time TIME NOT NULL DEFAULT '09:00:00',
     closing_time TIME NOT NULL DEFAULT '21:00:00',
     slot_interval_minutes INTEGER NOT NULL DEFAULT 15,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'disabled')),
+    subscription_plan TEXT NOT NULL DEFAULT 'pro' CHECK (subscription_plan IN ('basic', 'pro', 'enterprise')),
+    subscription_expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '1 year'),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -42,8 +49,45 @@ CREATE TRIGGER trg_salons_updated_at
 BEFORE UPDATE ON salons
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+-- Safe column migrations for existing salons table
+DO $$ 
+BEGIN 
+    BEGIN ALTER TABLE salons ADD COLUMN login_id TEXT UNIQUE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE salons ADD COLUMN password_hash TEXT NOT NULL DEFAULT 'salon123'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE salons ADD COLUMN owner_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE salons ADD COLUMN owner_phone TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE salons ADD COLUMN status TEXT NOT NULL DEFAULT 'active'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE salons ADD COLUMN subscription_plan TEXT NOT NULL DEFAULT 'pro'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE salons ADD COLUMN subscription_expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '1 year'); EXCEPTION WHEN duplicate_column THEN NULL; END;
+END $$;
+
 -- -----------------------------------------------------------------------------
--- 2. Customers CRM
+-- 1B. Users & Role-Based Access Control (RBAC)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    salon_id UUID REFERENCES salons(id) ON DELETE CASCADE, -- NULL for SUPER_ADMIN
+    email TEXT UNIQUE NOT NULL,
+    login_id TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'SALON_ADMIN' CHECK (role IN ('SUPER_ADMIN', 'SALON_ADMIN', 'SALON_STAFF')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    last_login_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
+CREATE TRIGGER trg_users_updated_at
+BEFORE UPDATE ON users
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE INDEX IF NOT EXISTS idx_users_salon ON users(salon_id);
+CREATE INDEX IF NOT EXISTS idx_users_login ON users(login_id);
+
+-- -----------------------------------------------------------------------------
+-- 2. Customers CRM (Multi-Tenant Isolated)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -75,7 +119,7 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE INDEX IF NOT EXISTS idx_customers_salon_phone ON customers(salon_id, whatsapp_number);
 
 -- -----------------------------------------------------------------------------
--- 3. Barbers & Staff
+-- 3. Barbers & Staff (Multi-Tenant Isolated)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS barbers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -86,7 +130,7 @@ CREATE TABLE IF NOT EXISTS barbers (
     experience_years NUMERIC(3,1) NOT NULL DEFAULT 2.0,
     rating NUMERIC(2,1) NOT NULL DEFAULT 4.8,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'on_break', 'off', 'inactive')),
-    weekly_off_day INTEGER NOT NULL DEFAULT 0 CHECK (weekly_off_day BETWEEN 0 AND 6), -- 0=Sunday, 1=Monday...
+    weekly_off_day INTEGER NOT NULL DEFAULT 0 CHECK (weekly_off_day BETWEEN 0 AND 6),
     start_time TIME NOT NULL DEFAULT '09:30:00',
     end_time TIME NOT NULL DEFAULT '20:30:00',
     skills TEXT[] DEFAULT '{}',
@@ -112,13 +156,13 @@ ADD CONSTRAINT fk_customers_favourite_barber
 FOREIGN KEY (favourite_barber_id) REFERENCES barbers(id) ON DELETE SET NULL;
 
 -- -----------------------------------------------------------------------------
--- 4. Services Catalog
+-- 4. Services Catalog (Multi-Tenant Isolated)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS services (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     salon_id UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    category TEXT NOT NULL DEFAULT 'Hair', -- Hair, Beard, Facial, Spa, Massage, Combo
+    category TEXT NOT NULL DEFAULT 'Hair',
     description TEXT,
     duration_minutes INTEGER NOT NULL DEFAULT 30,
     price NUMERIC(10,2) NOT NULL,
@@ -135,6 +179,8 @@ CREATE TRIGGER trg_services_updated_at
 BEFORE UPDATE ON services
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE INDEX IF NOT EXISTS idx_services_salon ON services(salon_id);
+
 -- Service to Barber Mapping
 CREATE TABLE IF NOT EXISTS barber_services (
     barber_id UUID NOT NULL REFERENCES barbers(id) ON DELETE CASCADE,
@@ -143,7 +189,7 @@ CREATE TABLE IF NOT EXISTS barber_services (
 );
 
 -- -----------------------------------------------------------------------------
--- 5. Appointments & Bookings
+-- 5. Appointments & Bookings (Multi-Tenant Isolated)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -173,10 +219,11 @@ CREATE TRIGGER trg_bookings_updated_at
 BEFORE UPDATE ON bookings
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE INDEX IF NOT EXISTS idx_bookings_barber_date ON bookings(barber_id, booking_date, status);
-CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_salon ON bookings(salon_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_barber_date ON bookings(salon_id, barber_id, booking_date, status);
+CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(salon_id, customer_id);
 
--- Booking Services (Multi-service per appointment)
+-- Booking Services
 CREATE TABLE IF NOT EXISTS booking_services (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
@@ -223,11 +270,13 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_salon ON whatsapp_messages(salon_id);
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_from_to ON whatsapp_messages(from_number, to_number);
 
 -- Persistent Conversation Memory Engine State
 CREATE TABLE IF NOT EXISTS user_conversation_data (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    salon_id UUID REFERENCES salons(id) ON DELETE CASCADE,
     from_number TEXT NOT NULL,
     to_number TEXT NOT NULL,
     conversation_id TEXT,
@@ -246,49 +295,18 @@ CREATE TABLE IF NOT EXISTS user_conversation_data (
     UNIQUE (from_number, to_number)
 );
 
--- Safely add missing columns to user_conversation_data if table already exists
+CREATE INDEX IF NOT EXISTS idx_user_conversation_salon ON user_conversation_data(salon_id);
+
 DO $$ 
 BEGIN 
-    BEGIN
-        ALTER TABLE user_conversation_data ADD COLUMN conversation_id TEXT;
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE user_conversation_data ADD COLUMN active_flow TEXT NOT NULL DEFAULT 'WELCOME';
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE user_conversation_data ADD COLUMN current_step TEXT NOT NULL DEFAULT 'MAIN_MENU';
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE user_conversation_data ADD COLUMN previous_step TEXT;
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE user_conversation_data ADD COLUMN draft_booking JSONB NOT NULL DEFAULT '{}'::jsonb;
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE user_conversation_data ADD COLUMN last_user_message TEXT;
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE user_conversation_data ADD COLUMN last_bot_message TEXT;
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE user_conversation_data ADD COLUMN flow_status TEXT NOT NULL DEFAULT 'active';
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE user_conversation_data ADD COLUMN last_interaction_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE whatsapp_messages ADD COLUMN salon_id UUID REFERENCES salons(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE user_conversation_data ADD COLUMN salon_id UUID REFERENCES salons(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
--- Phone to Document & Auth Token Mapping (With Dynamic Webhook Support)
+-- Phone to Document & Auth Token Mapping (Multi-Tenant Mapping)
 CREATE TABLE IF NOT EXISTS phone_document_mapping (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    salon_id UUID REFERENCES salons(id) ON DELETE CASCADE,
     user_id UUID,
     webhook_id TEXT,
     webhook_secret TEXT,
@@ -308,31 +326,19 @@ CREATE TABLE IF NOT EXISTS phone_document_mapping (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Safely add missing columns to phone_document_mapping if table already exists
+CREATE INDEX IF NOT EXISTS idx_phone_mapping_salon ON phone_document_mapping(salon_id);
+
 DO $$ 
 BEGIN 
-    BEGIN
-        ALTER TABLE phone_document_mapping ADD COLUMN webhook_id TEXT;
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE phone_document_mapping ADD COLUMN webhook_secret TEXT;
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE phone_document_mapping ADD COLUMN webhook_enabled BOOLEAN NOT NULL DEFAULT TRUE;
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
-
-    BEGIN
-        ALTER TABLE phone_document_mapping ADD COLUMN user_id UUID;
-    EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE phone_document_mapping ADD COLUMN salon_id UUID REFERENCES salons(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 8. Knowledge Base & Vector Documents (RAG)
+-- 8. Knowledge Base & Vector Documents (Multi-Tenant RAG)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    salon_id UUID REFERENCES salons(id) ON DELETE CASCADE,
     filename TEXT NOT NULL,
     file_type TEXT,
     content TEXT,
@@ -342,14 +348,24 @@ CREATE TABLE IF NOT EXISTS documents (
 
 CREATE TABLE IF NOT EXISTS document_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    salon_id UUID REFERENCES salons(id) ON DELETE CASCADE,
     file_id UUID REFERENCES documents(id) ON DELETE CASCADE,
     chunk TEXT NOT NULL,
-    embedding VECTOR(1024), -- Mistral Embedding 1024 dimensions
+    embedding VECTOR(1024),
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Vector Search Helper Function for WhatsApp Phone Numbers
+CREATE INDEX IF NOT EXISTS idx_documents_salon ON documents(salon_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_salon ON document_chunks(salon_id);
+
+DO $$ 
+BEGIN 
+    BEGIN ALTER TABLE documents ADD COLUMN salon_id UUID REFERENCES salons(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+    BEGIN ALTER TABLE document_chunks ADD COLUMN salon_id UUID REFERENCES salons(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+END $$;
+
+-- Multi-Tenant Vector Search Helper Function
 CREATE OR REPLACE FUNCTION match_document_chunks_by_phone(
     query_embedding VECTOR(1024),
     p_phone_number TEXT,
@@ -392,38 +408,51 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Function to automatically check slot collision
-CREATE OR REPLACE FUNCTION check_barber_slot_collision(
-    p_barber_id UUID,
-    p_booking_date DATE,
-    p_start_time TIME,
-    p_end_time TIME,
-    p_exclude_booking_id UUID DEFAULT NULL
-)
-RETURNS BOOLEAN AS $$
-DECLARE
-    v_conflict_count INTEGER;
-BEGIN
-    SELECT COUNT(*) INTO v_conflict_count
-    FROM bookings
-    WHERE barber_id = p_barber_id
-      AND booking_date = p_booking_date
-      AND status IN ('confirmed', 'in_progress', 'pending')
-      AND (p_exclude_booking_id IS NULL OR id != p_exclude_booking_id)
-      AND (
-          (p_start_time >= start_time AND p_start_time < end_time) OR
-          (p_end_time > start_time AND p_end_time <= end_time) OR
-          (p_start_time <= start_time AND p_end_time >= end_time)
-      );
-
-    RETURN v_conflict_count > 0;
-END;
-$$ LANGUAGE plpgsql;
+CREATE INDEX IF NOT EXISTS idx_notifications_salon ON notifications(salon_id);
 
 -- -----------------------------------------------------------------------------
--- 10. Disable RLS & Grant Access to Anon and Authenticated Roles
+-- 10. Seed Default Super Admin User & Default Salon
+-- -----------------------------------------------------------------------------
+INSERT INTO salons (id, name, slug, login_id, password_hash, phone_number, whatsapp_origin, status, subscription_plan)
+VALUES (
+    '11111111-1111-1111-1111-111111111111',
+    'Velvety Hair Studio',
+    'velvety-studio',
+    'velvety_admin',
+    'salon123',
+    '919005300803',
+    'https://api.11za.in',
+    'active',
+    'pro'
+) ON CONFLICT (phone_number) DO UPDATE 
+SET login_id = 'velvety_admin', password_hash = 'salon123';
+
+INSERT INTO users (email, login_id, password_hash, name, role, status)
+VALUES (
+    'admin@salonsaas.com',
+    'admin',
+    'admin123',
+    'Super Admin',
+    'SUPER_ADMIN',
+    'active'
+) ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO users (salon_id, email, login_id, password_hash, name, role, status)
+VALUES (
+    '11111111-1111-1111-1111-111111111111',
+    'owner@velvetystudio.com',
+    'velvety_admin',
+    'salon123',
+    'Velvety Salon Admin',
+    'SALON_ADMIN',
+    'active'
+) ON CONFLICT (email) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- 11. Disable RLS & Grant Access to Roles
 -- -----------------------------------------------------------------------------
 ALTER TABLE salons DISABLE ROW LEVEL SECURITY;
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE customers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE barbers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE services DISABLE ROW LEVEL SECURITY;

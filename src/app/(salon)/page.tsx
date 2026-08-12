@@ -128,11 +128,11 @@ export default function SalonDashboardPage() {
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-white">{analytics.todayBookings} Appointments</div>
+            <div className="text-2xl font-black text-white">{analytics.todayBookingsCount} Appointments</div>
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400 font-medium">
-              <span className="text-emerald-400 font-bold">{analytics.upcomingBookings} Upcoming</span>
+              <span className="text-emerald-400 font-bold">{analytics.todayBookingsCount} Today</span>
               <span>•</span>
-              <span>{analytics.cancelledBookings} Cancelled</span>
+              <span>Live Supabase Data</span>
             </div>
           </div>
         </div>
@@ -162,7 +162,7 @@ export default function SalonDashboardPage() {
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-white">{analytics.totalCustomersCount} Onboarded</div>
+            <div className="text-2xl font-black text-white">{analytics.activeCustomersCount} Onboarded</div>
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-blue-400 font-medium">
               <span>Real Supabase CRM</span>
             </div>
@@ -238,7 +238,7 @@ export default function SalonDashboardPage() {
                         <p className="text-xs text-slate-400 mt-1">
                           Services:{" "}
                           <span className="text-slate-200 font-medium">
-                            {b.services.map((s) => s.serviceName).join(", ") || "Haircut"}
+                            {(b.services ?? []).map((s) => s.serviceName).join(", ") || b.serviceName || "Haircut"}
                           </span>
                         </p>
                         <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1">

@@ -16,6 +16,7 @@ export interface DraftBooking {
 
 export interface CustomerProfile {
   id?: string;
+  salon_id?: string;
   name?: string;
   phone_number?: string;
   whatsapp_number?: string;
@@ -29,6 +30,7 @@ export interface CustomerProfile {
 
 export interface ConversationMemory {
   id?: string;
+  salonId?: string;
   fromNumber: string;
   toNumber: string;
   conversationId: string;
@@ -50,19 +52,25 @@ export interface ConversationMemory {
 export async function loadConversationMemory(
   fromNumber: string,
   toNumber: string,
-  senderName?: string
+  senderName?: string,
+  targetSalonId?: string
 ): Promise<ConversationMemory> {
   try {
-    logStep("LOADING_CONVERSATION_MEMORY", { fromNumber, toNumber, senderName });
+    logStep("LOADING_CONVERSATION_MEMORY", { fromNumber, toNumber, senderName, targetSalonId });
 
     // 1. Fetch CRM Customer Record
-    let customer: CustomerProfile = {};
-    const { data: customerData } = await supabaseAdmin
+    let customerQuery = supabaseAdmin
       .from("customers")
-      .select("id, name, phone_number, whatsapp_number, loyalty_points, total_visits, total_spend, favourite_barber_id, is_vip, barbers(name)")
-      .eq("whatsapp_number", fromNumber)
-      .maybeSingle();
+      .select("id, salon_id, name, phone_number, whatsapp_number, loyalty_points, total_visits, total_spend, favourite_barber_id, is_vip, barbers(name)")
+      .eq("whatsapp_number", fromNumber);
 
+    if (targetSalonId) {
+      customerQuery = customerQuery.eq("salon_id", targetSalonId);
+    }
+
+    const { data: customerData } = await customerQuery.maybeSingle();
+
+    let customer: CustomerProfile = {};
     if (customerData) {
       const barbersData: any = (customerData as any).barbers;
       const barberName = Array.isArray(barbersData)
@@ -71,6 +79,7 @@ export async function loadConversationMemory(
 
       customer = {
         id: customerData.id,
+        salon_id: customerData.salon_id,
         name: customerData.name || senderName || "Guest",
         phone_number: customerData.phone_number,
         whatsapp_number: customerData.whatsapp_number,
@@ -82,20 +91,26 @@ export async function loadConversationMemory(
         is_vip: customerData.is_vip || false,
       };
     } else if (senderName) {
-      customer = { name: senderName, whatsapp_number: fromNumber };
+      customer = { name: senderName, whatsapp_number: fromNumber, salon_id: targetSalonId };
     }
 
     // 2. Fetch Conversation Memory Record
-    const { data: memData } = await supabaseAdmin
+    let memQuery = supabaseAdmin
       .from("user_conversation_data")
       .select("*")
       .eq("from_number", fromNumber)
-      .eq("to_number", toNumber)
-      .maybeSingle();
+      .eq("to_number", toNumber);
+
+    if (targetSalonId) {
+      memQuery = memQuery.eq("salon_id", targetSalonId);
+    }
+
+    const { data: memData } = await memQuery.maybeSingle();
 
     if (memData) {
       const memory: ConversationMemory = {
         id: memData.id,
+        salonId: memData.salon_id || targetSalonId,
         fromNumber: memData.from_number,
         toNumber: memData.to_number,
         conversationId: memData.conversation_id || `conv_${Date.now()}`,
@@ -112,6 +127,7 @@ export async function loadConversationMemory(
 
       logStep("CONVERSATION_MEMORY_LOADED", {
         conversationId: memory.conversationId,
+        salonId: memory.salonId,
         activeFlow: memory.activeFlow,
         currentStep: memory.currentStep,
         draftBooking: memory.draftBooking,
@@ -123,6 +139,7 @@ export async function loadConversationMemory(
 
     // Initialize Default Memory for New Conversations
     const newMemory: ConversationMemory = {
+      salonId: targetSalonId,
       fromNumber,
       toNumber,
       conversationId: `conv_${Date.now()}`,
@@ -141,13 +158,14 @@ export async function loadConversationMemory(
   } catch (err) {
     logError("loadConversationMemory Exception", err);
     return {
+      salonId: targetSalonId,
       fromNumber,
       toNumber,
       conversationId: `conv_${Date.now()}`,
       activeFlow: "WELCOME",
       currentStep: "MAIN_MENU",
       draftBooking: {},
-      customerProfile: { name: senderName || "Guest" },
+      customerProfile: { name: senderName || "Guest", salon_id: targetSalonId },
       flowStatus: "active",
       lastInteractionAt: new Date().toISOString(),
     };
@@ -161,12 +179,13 @@ export async function saveConversationMemory(memory: ConversationMemory): Promis
   try {
     logStep("SAVING_CONVERSATION_MEMORY", {
       fromNumber: memory.fromNumber,
+      salonId: memory.salonId,
       activeFlow: memory.activeFlow,
       currentStep: memory.currentStep,
       draftBooking: memory.draftBooking,
     });
 
-    const record = {
+    const record: any = {
       from_number: memory.fromNumber,
       to_number: memory.toNumber,
       conversation_id: memory.conversationId,
@@ -180,6 +199,10 @@ export async function saveConversationMemory(memory: ConversationMemory): Promis
       last_interaction_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    if (memory.salonId) {
+      record.salon_id = memory.salonId;
+    }
 
     const { error } = await supabaseAdmin
       .from("user_conversation_data")

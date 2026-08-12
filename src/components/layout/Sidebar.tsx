@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -15,13 +15,31 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  Zap,
   Bot
 } from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [salonName, setSalonName] = useState<string>("Velvet Cut");
+
+  useEffect(() => {
+    async function loadSalonInfo() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated) {
+            const name = data.salon?.name || data.user?.name || "Velvet Cut";
+            setSalonName(name);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load sidebar salon info:", e);
+      }
+    }
+    loadSalonInfo();
+  }, []);
 
   const navItems = [
     { label: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -42,14 +60,15 @@ export function Sidebar() {
     >
       {/* Brand Logo Header */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-slate-100 dark:border-slate-800/80">
-        <Link href="/" className="flex items-center gap-3 overflow-hidden">
+        <Link href="/" className="flex items-center gap-3 overflow-hidden min-w-0">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-rose-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-rose-500/20 shrink-0">
             <Scissors className="w-5 h-5" />
           </div>
           {!collapsed && (
-            <div className="flex flex-col">
-              <span className="font-bold text-base tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5">
-                Velvet Cut <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white flex items-center gap-1 truncate">
+                <span className="truncate">{salonName}</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
               </span>
               <span className="text-[10px] font-semibold tracking-wide text-emerald-600 dark:text-emerald-400 uppercase flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -62,7 +81,7 @@ export function Sidebar() {
         {/* Toggle Collapse Button */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
           title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}

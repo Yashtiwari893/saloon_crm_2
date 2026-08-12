@@ -68,14 +68,15 @@ export async function handleSalonAutoResponse(
       };
     }
 
-    // 1. Fetch Credentials for 11za WhatsApp API & Gemini AI
+    // 1. Fetch Credentials & Tenant Salon ID for 11za WhatsApp API & Gemini AI
     const mappingResult = await supabaseAdmin
       .from("phone_document_mapping")
-      .select("system_prompt, auth_token, origin, gemini_api_key, groq_api_key, mistral_api_key")
+      .select("salon_id, system_prompt, auth_token, origin, gemini_api_key, groq_api_key, mistral_api_key")
       .eq("phone_number", toNumber)
       .maybeSingle();
 
     const phoneMapping = mappingResult.data || {
+      salon_id: undefined,
       auth_token: process.env.WHATSAPP_AUTH_TOKEN || "demo-token",
       origin: process.env.WHATSAPP_ORIGIN || "https://api.11za.in",
       system_prompt: "",
@@ -84,12 +85,13 @@ export async function handleSalonAutoResponse(
       mistral_api_key: process.env.MISTRAL_API_KEY || "",
     };
 
+    const targetSalonId = phoneMapping.salon_id || undefined;
     const authToken = phoneMapping.auth_token || process.env.WHATSAPP_AUTH_TOKEN || "";
     const originWebsite = phoneMapping.origin || process.env.WHATSAPP_ORIGIN || "https://api.11za.in";
     const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
 
-    // 2. Persistent Memory Architecture: Load Customer Context & Active Booking Draft
-    const memory = await loadConversationMemory(fromNumber, toNumber, senderName);
+    // 2. Persistent Memory Architecture: Load Customer Context & Active Booking Draft for targetSalonId
+    const memory = await loadConversationMemory(fromNumber, toNumber, senderName, targetSalonId);
 
     // 3. NLU Intent & Entity Extraction
     const nluResult = await parseUserMessageNlu(
@@ -106,25 +108,33 @@ export async function handleSalonAutoResponse(
     // 5. Update Memory Records with Last Interaction
     stateResult.nextMemory.lastUserMessage = messageText;
     stateResult.nextMemory.lastBotMessage = replyText;
+    if (targetSalonId) {
+      stateResult.nextMemory.salonId = targetSalonId;
+    }
     await saveConversationMemory(stateResult.nextMemory);
 
     // 6. Send WhatsApp Response via 11za Official API
     let sendStatus = false;
     if (authToken && originWebsite && replyText) {
-      logStep("SENDING_WHATSAPP_REPLY_VIA_11ZA", { to: fromNumber, responseLength: replyText.length });
+      logStep("SENDING_WHATSAPP_REPLY_VIA_11ZA", { to: fromNumber, responseLength: replyText.length, salonId: targetSalonId });
       const sendRes = await sendWhatsAppMessage(fromNumber, replyText, authToken, originWebsite);
       sendStatus = sendRes.success;
     } else {
       logError("WhatsApp Send Skipped", { authTokenPresent: Boolean(authToken), originWebsite, replyTextPresent: Boolean(replyText) });
     }
 
-    // 7. Mark Message as Responded in Supabase
+    // 7. Mark Message as Responded in Supabase & Attach salon_id
+    const updateRecord: any = {
+      auto_respond_sent: true,
+      response_sent_at: new Date().toISOString(),
+    };
+    if (targetSalonId) {
+      updateRecord.salon_id = targetSalonId;
+    }
+
     await supabaseAdmin
       .from("whatsapp_messages")
-      .update({
-        auto_respond_sent: true,
-        response_sent_at: new Date().toISOString(),
-      })
+      .update(updateRecord)
       .eq("message_id", messageId);
 
     logStep("AUTO_RESPONDER_SUCCESS", { totalDurationMs: Date.now() - startTime, sent: sendStatus });

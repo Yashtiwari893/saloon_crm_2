@@ -268,7 +268,7 @@ export default function BookingsCalendarPage() {
                               <span className="text-emerald-400">₹{matchBooking.totalPrice}</span>
                             </div>
                             <p className="text-[10px] text-slate-300 truncate">
-                              {matchBooking.services[0]?.serviceName || "Haircut"}
+                              {matchBooking.services?.[0]?.serviceName || matchBooking.serviceName || "Haircut"}
                             </p>
                             <div className="flex items-center justify-between pt-1">
                               <span className="text-[9px] font-bold text-amber-400 uppercase">
@@ -327,7 +327,7 @@ export default function BookingsCalendarPage() {
                     <div className="flex items-center gap-4 text-xs text-slate-400 mt-1">
                       <span>Barber: <strong className="text-slate-200">{b.barberName}</strong></span>
                       <span>•</span>
-                      <span>Services: <strong className="text-slate-200">{b.services.map((s) => s.serviceName).join(", ") || "Haircut"}</strong></span>
+                      <span>Services: <strong className="text-slate-200">{(b.services ?? []).map((s) => s.serviceName).join(", ") || b.serviceName || "Haircut"}</strong></span>
                       <span>•</span>
                       <span>Code: <strong className="text-slate-200">{b.bookingCode}</strong></span>
                     </div>
