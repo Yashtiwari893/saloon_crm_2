@@ -20,6 +20,10 @@ export interface Salon {
   openingTime: string; // HH:mm:ss
   closingTime: string; // HH:mm:ss
   slotIntervalMinutes: number;
+  subscriptionPlan?: string;
+  subscriptionExpiresAt?: string;
+  featureOverrides?: Record<string, boolean>;
+  enabledFeatures?: string[];
   isActive: boolean;
 }
 

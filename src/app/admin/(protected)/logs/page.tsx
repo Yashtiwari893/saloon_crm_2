@@ -6,13 +6,6 @@ import {
   FileText,
   Search,
   RefreshCw,
-  MessageSquare,
-  Bot,
-  Wifi,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  SlidersHorizontal,
 } from "lucide-react";
 
 export default function LogsAdminPage() {
@@ -55,144 +48,100 @@ export default function LogsAdminPage() {
     return matchesSearch && matchesLevel;
   });
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Loading system event logs...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <FileText className="w-5 h-5 text-amber-400" />
-            <span>System & WhatsApp Webhook Audit Logs</span>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 uppercase tracking-wider">
+              System Audit Trails
+            </span>
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Logger Stream Active
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2 mt-1">
+            <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <span>Multi-Tenant Audit Logs & Event Stream</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Real-time multi-tenant log inspector for WhatsApp inbound, AI NLU responses, and webhook events
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Real-time webhook events, WhatsApp dispatch status, NLU intent resolution, and system exceptions.
           </p>
         </div>
 
         <button
           onClick={fetchLogs}
-          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold"
+          className="h-11 px-4 rounded-[10px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition flex items-center gap-2 text-xs font-semibold"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           <span>Refresh Logs</span>
         </button>
       </div>
 
-      {/* Filter Tabs & Search */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
-        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
-          <button
-            onClick={() => setLevelFilter("all")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-              levelFilter === "all"
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                : "text-slate-400 hover:bg-slate-800 hover:text-white"
-            }`}
-          >
-            All Logs ({logs.length})
-          </button>
-          <button
-            onClick={() => setLevelFilter("USER_INBOUND")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-              levelFilter === "USER_INBOUND"
-                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                : "text-slate-400 hover:bg-slate-800 hover:text-white"
-            }`}
-          >
-            Inbound Messages
-          </button>
-          <button
-            onClick={() => setLevelFilter("AI_RESPONSE")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-              levelFilter === "AI_RESPONSE"
-                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                : "text-slate-400 hover:bg-slate-800 hover:text-white"
-            }`}
-          >
-            AI Responses
-          </button>
-          <button
-            onClick={() => setLevelFilter("WEBHOOK")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-              levelFilter === "WEBHOOK"
-                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
-                : "text-slate-400 hover:bg-slate-800 hover:text-white"
-            }`}
-          >
-            Webhook Events
-          </button>
-        </div>
-
-        <div className="relative w-full md:w-72">
-          <Search className="w-4 h-4 absolute left-3.5 top-2.5 text-slate-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search logs by text, phone, salon..."
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
-          />
-        </div>
-      </div>
-
-      {/* Logs Table */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <SlidersHorizontal className="w-5 h-5 text-amber-400" />
-            <span>Live Audit Log Inspector</span>
-          </h2>
-          <span className="text-xs text-slate-500">{filteredLogs.length} events logged</span>
-        </div>
-
-        {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-xs">
-            <RefreshCw className="w-5 h-5 animate-spin text-amber-500 mx-auto mb-2" />
-            <span>Loading system audit logs...</span>
+      {/* Directory Table Container */}
+      <div className="p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search salon, phone or log message..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-11 pl-10 pr-4 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-[10px] text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-600"
+            />
           </div>
-        ) : filteredLogs.length === 0 ? (
-          <div className="py-16 text-center text-slate-400 text-xs">No audit logs found.</div>
-        ) : (
-          <div className="space-y-2">
-            {filteredLogs.map((log) => (
-              <div
-                key={log.id}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/80 hover:border-slate-700 transition flex flex-col md:flex-row md:items-center justify-between gap-3"
-              >
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  {log.level === "AI_RESPONSE" ? (
-                    <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
-                      <Bot className="w-4 h-4" />
-                    </div>
-                  ) : log.level === "WEBHOOK" ? (
-                    <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0">
-                      <Wifi className="w-4 h-4" />
-                    </div>
-                  ) : (
-                    <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                      <MessageSquare className="w-4 h-4" />
-                    </div>
-                  )}
+        </div>
 
-                  <div className="space-y-0.5 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-white text-xs">{log.salonName}</span>
-                      <span className="font-mono text-[11px] text-amber-400">+{log.phoneNumber}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 uppercase">
-                        {log.level}
+        <div className="overflow-x-auto rounded-[10px] border border-slate-200 dark:border-slate-800">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <th className="py-3 px-4">Timestamp</th>
+                <th className="py-3 px-4">Salon Tenant</th>
+                <th className="py-3 px-4">Phone Number</th>
+                <th className="py-3 px-4">Log Message & Details</th>
+                <th className="py-3 px-4">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs font-mono">
+              {filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-400 font-sans">
+                    No log entries found.
+                  </td>
+                </tr>
+              ) : (
+                filteredLogs.map((l, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                    <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400">{l.timestamp}</td>
+                    <td className="py-3.5 px-4 font-sans font-bold text-slate-900 dark:text-slate-100">{l.salonName}</td>
+                    <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">{l.phoneNumber}</td>
+                    <td className="py-3.5 px-4 text-slate-800 dark:text-slate-200 font-sans">{l.messageText}</td>
+                    <td className="py-3.5 px-4">
+                      <span className="px-2.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 uppercase font-sans">
+                        Success
                       </span>
-                    </div>
-                    <p className="text-xs text-slate-300 font-mono truncate">{log.messageText || "Webhook ping received"}</p>
-                  </div>
-                </div>
-
-                <div className="text-[11px] text-slate-500 font-mono whitespace-nowrap self-end md:self-auto">
-                  {new Date(log.createdAt).toLocaleString("en-IN")}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

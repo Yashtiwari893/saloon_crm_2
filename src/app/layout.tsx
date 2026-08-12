@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Velvet Cut | WhatsApp-First Salon Management SaaS",
+  title: "Inwante CRM | WhatsApp-First Salon Management SaaS",
   description: "Enterprise WhatsApp-first salon booking, barber schedule & customer CRM dashboard",
 };
 

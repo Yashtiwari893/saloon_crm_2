@@ -92,6 +92,7 @@ export async function PATCH(
       "business_category",
       "cancellation_policy",
       "password_hash",
+      "feature_overrides",
     ];
 
     const updateFields: any = { updated_at: new Date().toISOString() };

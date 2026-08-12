@@ -22,7 +22,7 @@ export const SALON_UUID = DEFAULT_SALON_UUID;
 export async function resolveActiveSalonId(requestedSalonId?: string): Promise<string> {
   const user = await getSessionUser();
 
-  // 1. SALON_ADMIN / SALON_STAFF: Always strictly enforce authenticated salonId (never trust frontend param)
+  // 1. SALON_ADMIN / SALON_STAFF: Always strictly enforce authenticated salonId
   if (user?.role === "SALON_ADMIN" || user?.role === "SALON_STAFF") {
     if (user.salonId) return user.salonId;
   }
@@ -38,34 +38,25 @@ export async function resolveActiveSalonId(requestedSalonId?: string): Promise<s
   }
 
   if (user?.salonId) return user.salonId;
+
+  // 4. Dynamic fallback to first existing salon in database (Never auto-recreate deleted demo salons)
+  try {
+    const { data: firstSalon } = await supabaseAdmin.from("salons").select("id").limit(1).maybeSingle();
+    if (firstSalon?.id) return firstSalon.id;
+  } catch (e) {
+    // Fallback if query fails
+  }
+
   return DEFAULT_SALON_UUID;
 }
 
-// Helper to ensure parent salon row exists in Supabase
+// Helper to verify parent salon row exists in Supabase
 async function ensureParentSalonExists(salonId: string) {
   try {
     const { data, error } = await supabaseAdmin.from("salons").select("id").eq("id", salonId).maybeSingle();
     if (error) {
       console.warn("Supabase connection check:", error.message || JSON.stringify(error));
       return;
-    }
-    if (!data) {
-      await supabaseAdmin.from("salons").upsert({
-        id: salonId,
-        name: "Velvet Cut & Style Lounge",
-        slug: "velvet-cut-salon",
-        login_id: "velvety_admin",
-        password_hash: "salon123",
-        phone_number: "+919876543210",
-        address: "Main Market, Bandra West",
-        city: "Mumbai",
-        currency: "INR",
-        opening_time: "09:00:00",
-        closing_time: "21:00:00",
-        slot_interval_minutes: 15,
-        status: "active",
-        is_active: true,
-      });
     }
   } catch (err) {
     console.warn("Salon row check warning:", err);

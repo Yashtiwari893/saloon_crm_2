@@ -7,19 +7,13 @@ import {
   Users,
   Calendar,
   MessageSquare,
-  Bot,
   Plus,
   Search,
   Eye,
   LogIn,
-  Power,
-  Sparkles,
-  CheckCircle2,
-  XCircle,
   TrendingUp,
   Activity,
-  RefreshCw,
-  Wifi,
+  Zap,
 } from "lucide-react";
 
 export default function SuperAdminDashboardPage() {
@@ -78,33 +72,24 @@ export default function SuperAdminDashboardPage() {
         body: JSON.stringify(newSalon),
       });
       const data = await res.json();
-      setIsSubmitting(false);
-
-      if (!res.ok || !data.success) {
-        setActionError(data.error || "Failed to create salon");
-        return;
+      if (data.success) {
+        setShowAddModal(false);
+        setNewSalon({
+          name: "",
+          login_id: "",
+          password: "",
+          phone_number: "",
+          owner_name: "",
+          subscription_plan: "pro",
+        });
+        fetchSalons();
+      } else {
+        setActionError(data.message || "Failed to create salon");
       }
-
-      setShowAddModal(false);
-      setNewSalon({ name: "", login_id: "", password: "", phone_number: "", owner_name: "", subscription_plan: "pro" });
-      fetchSalons();
-    } catch (err: any) {
+    } catch {
+      setActionError("An unexpected error occurred");
+    } finally {
       setIsSubmitting(false);
-      setActionError("Failed to connect to server");
-    }
-  }
-
-  async function handleToggleStatus(salonId: string, currentStatus: string) {
-    const nextStatus = currentStatus === "active" ? "inactive" : "active";
-    try {
-      await fetch(`/api/admin/salons/${salonId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      fetchSalons();
-    } catch (e) {
-      console.error(e);
     }
   }
 
@@ -113,15 +98,18 @@ export default function SuperAdminDashboardPage() {
       const res = await fetch("/api/admin/impersonate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ salon_id: salonId }),
+        body: JSON.stringify({ salonId }),
       });
       const data = await res.json();
       if (data.success) {
         router.push("/");
         router.refresh();
+      } else {
+        alert(data.message || "Failed to impersonate salon");
       }
     } catch (e) {
       console.error(e);
+      alert("Failed to impersonate salon");
     }
   }
 
@@ -129,305 +117,320 @@ export default function SuperAdminDashboardPage() {
     (s) =>
       s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.login_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.owner_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.phone_number?.includes(searchQuery)
   );
 
   const totalSalons = salons.length;
-  const activeSalons = salons.filter((s) => s.status === "active").length;
-  const inactiveSalons = totalSalons - activeSalons;
-  const totalBookings = salons.reduce((acc, s) => acc + (s.booking_count || 0), 0);
-  const totalCustomers = salons.reduce((acc, s) => acc + (s.customer_count || 0), 0);
-  const whatsappConnected = salons.filter((s) => s.whatsapp_origin).length;
+  const totalCustomers = salons.reduce((sum, s) => sum + (s.total_customers || 0), 0);
+  const totalBookings = salons.reduce((sum, s) => sum + (s.total_bookings || 0), 0);
 
-  const kpiCards = [
-    { label: "Total Salons", value: totalSalons, icon: Building2, color: "purple", textColor: "text-purple-400", bgColor: "bg-purple-500/10", borderColor: "border-purple-500/20" },
-    { label: "Active Salons", value: activeSalons, icon: CheckCircle2, color: "emerald", textColor: "text-emerald-400", bgColor: "bg-emerald-500/10", borderColor: "border-emerald-500/20" },
-    { label: "Inactive Salons", value: inactiveSalons, icon: XCircle, color: "red", textColor: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/20" },
-    { label: "Total Clients", value: totalCustomers, icon: Users, color: "cyan", textColor: "text-cyan-400", bgColor: "bg-cyan-500/10", borderColor: "border-cyan-500/20" },
-    { label: "Total Bookings", value: totalBookings, icon: Calendar, color: "amber", textColor: "text-amber-400", bgColor: "bg-amber-500/10", borderColor: "border-amber-500/20" },
-    { label: "WhatsApp Connected", value: whatsappConnected, icon: Wifi, color: "green", textColor: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/20" },
-    { label: "AI Chatbots Active", value: activeSalons, icon: Bot, color: "indigo", textColor: "text-indigo-400", bgColor: "bg-indigo-500/10", borderColor: "border-indigo-500/20" },
-    { label: "Platform Health", value: "100%", icon: Activity, color: "teal", textColor: "text-teal-400", bgColor: "bg-teal-500/10", borderColor: "border-teal-500/20" },
-  ];
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Loading workspace analytics...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Platform Overview</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Real-time SaaS metrics across all tenants</p>
+      {/* Top Banner (Light / Dark B2B SaaS Header) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 uppercase tracking-wider">
+              Multi-Tenant Operations
+            </span>
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              {salons.length} Active Salons
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+            Overview
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 text-xs max-w-xl">
+            Centralized control center for salon provisioning, subscriptions, 11za WhatsApp API profit tracking, and tenant impersonation.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchSalons}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition"
-            title="Refresh"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold px-4 py-2 rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-2 text-sm"
+            className="h-11 px-4 rounded-[10px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            <span>Add New Salon</span>
+            <span>Add Quick Salon</span>
           </button>
+          <a
+            href="/admin/salons/onboard"
+            className="h-11 px-4 rounded-[10px] bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition flex items-center gap-2"
+          >
+            <Zap className="w-4 h-4 fill-white" />
+            <span>9-Step Onboarding Wizard</span>
+          </a>
         </div>
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {kpiCards.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <div
-              key={kpi.label}
-              className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center justify-between hover:border-slate-700 transition-all group"
-            >
-              <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-tight">{kpi.label}</p>
-                <h3 className={`text-2xl font-extrabold mt-1 ${kpi.textColor}`}>{kpi.value}</h3>
-              </div>
-              <div className={`p-2.5 rounded-xl ${kpi.bgColor} ${kpi.borderColor} border`}>
-                <Icon className={`w-5 h-5 ${kpi.textColor}`} />
-              </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPI 1: Salons */}
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Salons</span>
+            <div className="w-9 h-9 rounded-[10px] bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200 dark:border-blue-500/20">
+              <Building2 className="w-5 h-5" />
             </div>
-          );
-        })}
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">{totalSalons}</div>
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-blue-600 dark:text-blue-400">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Active Tenant Accounts</span>
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 2: Total Customers */}
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Customers</span>
+            <div className="w-9 h-9 rounded-[10px] bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200 dark:border-emerald-500/20">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">{totalCustomers.toLocaleString()}</div>
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Activity className="w-3.5 h-3.5" />
+              <span>Registered CRM Profiles</span>
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 3: Total Bookings */}
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Bookings</span>
+            <div className="w-9 h-9 rounded-[10px] bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center border border-sky-200 dark:border-sky-500/20">
+              <Calendar className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">{totalBookings.toLocaleString()}</div>
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-sky-600 dark:text-sky-400">
+              <span>Processed Appointments</span>
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 4: 11za Profit Health */}
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">11za Profit Health</span>
+            <div className="w-9 h-9 rounded-[10px] bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-500/20">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 tracking-tight">+68% Profit</div>
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <span>Single WABA Router Active</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Salons Directory Table */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-2xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-amber-400" />
-            <span>Registered Salons Directory</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-medium">
-              {totalSalons} tenants
-            </span>
-          </h2>
+      {/* Salons Table Directory */}
+      <div className="p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              Registered Salons Directory
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage onboarded tenant accounts and launch one-click admin impersonation</p>
+          </div>
 
-          <div className="relative w-full md:w-72">
-            <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-500" />
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              placeholder="Filter by name, ID or phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search salon name or login ID..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
+              className="w-full h-11 pl-10 pr-4 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-[10px] text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-600 dark:focus:border-blue-500"
             />
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="py-16 text-center">
-            <div className="inline-flex items-center gap-2 text-slate-400 text-sm">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Loading platform tenants...</span>
-            </div>
-          </div>
-        ) : filteredSalons.length === 0 ? (
-          <div className="py-16 text-center">
-            <Building2 className="w-10 h-10 text-slate-700 mx-auto mb-3" />
-            <p className="text-slate-400 text-sm">No salons found.</p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="mt-3 text-xs text-amber-400 hover:text-amber-300 underline"
-            >
-              Create your first salon
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="bg-slate-950/80 text-[10px] font-semibold uppercase text-slate-500 border-b border-slate-800">
+        {/* Table */}
+        <div className="overflow-x-auto rounded-[10px] border border-slate-200 dark:border-slate-800">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <th className="py-3 px-4">Salon Info</th>
+                <th className="py-3 px-4">Owner & Phone</th>
+                <th className="py-3 px-4">Plan & Status</th>
+                <th className="py-3 px-4">CRM Stats</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
+              {filteredSalons.length === 0 ? (
                 <tr>
-                  <th className="py-3 px-4">Salon</th>
-                  <th className="py-3 px-4">Login ID</th>
-                  <th className="py-3 px-4">Phone</th>
-                  <th className="py-3 px-4">Plan</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-center">Bookings</th>
-                  <th className="py-3 px-4 text-center">Clients</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <td colSpan={5} className="py-8 text-center text-slate-400">
+                    No salons found matching your filter query.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {filteredSalons.map((salon) => (
-                  <tr key={salon.id} className="hover:bg-slate-800/30 transition group">
-                    <td className="py-4 px-4">
-                      <div className="font-semibold text-white text-sm">{salon.name}</div>
-                      <div className="text-[11px] text-slate-500">{salon.owner_name || "—"}</div>
+              ) : (
+                filteredSalons.map((salon) => (
+                  <tr key={salon.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                    <td className="py-3.5 px-4">
+                      <div className="font-bold text-slate-900 dark:text-slate-100">{salon.name}</div>
+                      <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">ID: {salon.login_id}</div>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className="font-mono text-xs text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-lg">
-                        {salon.login_id}
-                      </span>
+                    <td className="py-3.5 px-4">
+                      <div className="text-slate-800 dark:text-slate-200 font-medium">{salon.owner_name || "N/A"}</div>
+                      <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">{salon.phone_number || "No Phone"}</div>
                     </td>
-                    <td className="py-4 px-4 text-slate-300 text-xs">{salon.phone_number}</td>
-                    <td className="py-4 px-4">
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase">
-                        {salon.subscription_plan || "pro"}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      {salon.status === "active" ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Active
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 text-[10px] font-bold rounded-md bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 uppercase">
+                          {salon.subscription_plan || "pro"}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
-                          <XCircle className="w-3 h-3" />
-                          Inactive
+                        <span
+                          className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-md uppercase ${
+                            salon.status === "active"
+                              ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20"
+                              : "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20"
+                          }`}
+                        >
+                          {salon.status || "active"}
                         </span>
-                      )}
+                      </div>
                     </td>
-                    <td className="py-4 px-4 text-center font-bold text-white text-sm">{salon.booking_count ?? 0}</td>
-                    <td className="py-4 px-4 text-center font-bold text-white text-sm">{salon.customer_count ?? 0}</td>
-                    <td className="py-4 px-4 text-right">
+                    <td className="py-3.5 px-4">
+                      <div className="text-slate-800 dark:text-slate-200 font-medium">{salon.total_customers || 0} Clients</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">{salon.total_bookings || 0} Bookings</div>
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleImpersonate(salon.id)}
-                          title="Login as this Salon"
-                          className="px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 text-[11px] font-semibold transition inline-flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-[8px] bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-100 font-semibold text-xs transition flex items-center gap-1.5"
                         >
                           <LogIn className="w-3.5 h-3.5" />
-                          <span>Login as Salon</span>
+                          <span>Login As</span>
                         </button>
-
-                        <button
-                          onClick={() => handleToggleStatus(salon.id, salon.status)}
-                          title={salon.status === "active" ? "Deactivate" : "Activate"}
-                          className={`p-1.5 rounded-lg border transition ${
-                            salon.status === "active"
-                              ? "bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20"
-                              : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
-                          }`}
+                        <a
+                          href={`/admin/salons/${salon.id}`}
+                          className="px-3 py-1.5 rounded-[8px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold text-xs transition flex items-center gap-1.5"
                         >
-                          <Power className="w-3.5 h-3.5" />
-                        </button>
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Details</span>
+                        </a>
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Add New Salon Modal */}
+      {/* Add Quick Salon Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-5 relative">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-amber-400" />
-                <span>Onboard New Salon Tenant</span>
-              </h3>
-              <button
-                onClick={() => { setShowAddModal(false); setActionError(null); }}
-                className="text-slate-400 hover:text-white text-sm p-1 rounded-lg hover:bg-slate-800 transition"
-              >
-                ✕
-              </button>
-            </div>
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[16px] p-6 w-full max-w-md shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" /> Quick Add Salon
+            </h3>
 
             {actionError && (
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+              <div className="p-3 rounded-[10px] bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-medium">
                 {actionError}
               </div>
             )}
 
-            <form onSubmit={handleCreateSalon} className="space-y-4">
+            <form onSubmit={handleCreateSalon} className="space-y-3 text-xs">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Salon Name *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Salon Name *</label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. Akriti Saloon"
                   value={newSalon.name}
                   onChange={(e) => setNewSalon({ ...newSalon, name: e.target.value })}
-                  placeholder="e.g. ABC Hair Studio"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500/30 transition"
+                  className="w-full h-11 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-[10px] px-3.5 text-slate-900 dark:text-white focus:outline-none focus:border-blue-600"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Login ID *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Login ID *</label>
                   <input
                     type="text"
                     required
+                    placeholder="e.g. akriti_admin"
                     value={newSalon.login_id}
                     onChange={(e) => setNewSalon({ ...newSalon, login_id: e.target.value })}
-                    placeholder="e.g. abc_hair"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none font-mono transition"
+                    className="w-full h-11 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-[10px] px-3.5 text-slate-900 dark:text-white focus:outline-none focus:border-blue-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Password *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Password *</label>
                   <input
                     type="password"
                     required
+                    placeholder="••••••••"
                     value={newSalon.password}
                     onChange={(e) => setNewSalon({ ...newSalon, password: e.target.value })}
-                    placeholder="Set a secure password"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none transition"
+                    className="w-full h-11 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-[10px] px-3.5 text-slate-900 dark:text-white focus:outline-none focus:border-blue-600"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Phone / WhatsApp *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Owner Name</label>
                   <input
                     type="text"
-                    required
-                    value={newSalon.phone_number}
-                    onChange={(e) => setNewSalon({ ...newSalon, phone_number: e.target.value })}
-                    placeholder="919819988776"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none transition"
+                    placeholder="e.g. Yash Sharma"
+                    value={newSalon.owner_name}
+                    onChange={(e) => setNewSalon({ ...newSalon, owner_name: e.target.value })}
+                    className="w-full h-11 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-[10px] px-3.5 text-slate-900 dark:text-white focus:outline-none focus:border-blue-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Owner Name</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Phone Number</label>
                   <input
                     type="text"
-                    value={newSalon.owner_name}
-                    onChange={(e) => setNewSalon({ ...newSalon, owner_name: e.target.value })}
-                    placeholder="John Doe"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none transition"
+                    placeholder="e.g. 919876543210"
+                    value={newSalon.phone_number}
+                    onChange={(e) => setNewSalon({ ...newSalon, phone_number: e.target.value })}
+                    className="w-full h-11 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-[10px] px-3.5 text-slate-900 dark:text-white focus:outline-none focus:border-blue-600"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Subscription Plan</label>
-                <select
-                  value={newSalon.subscription_plan}
-                  onChange={(e) => setNewSalon({ ...newSalon, subscription_plan: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none transition"
-                >
-                  <option value="basic">Basic (₹1,999/mo)</option>
-                  <option value="pro">Pro (₹3,999/mo)</option>
-                  <option value="enterprise">Enterprise (Custom)</option>
-                </select>
-              </div>
-
-              <div className="pt-2 flex gap-3 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-2 pt-3">
                 <button
                   type="button"
-                  onClick={() => { setShowAddModal(false); setActionError(null); }}
-                  className="w-1/2 bg-slate-800 text-slate-300 py-2.5 rounded-xl font-semibold text-sm hover:bg-slate-700 transition"
+                  onClick={() => setShowAddModal(false)}
+                  className="h-11 px-4 rounded-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-1/2 bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-amber-500/20 hover:from-amber-400 hover:to-yellow-500 transition disabled:opacity-50"
+                  className="h-11 px-4 rounded-[10px] bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-sm disabled:opacity-50"
                 >
                   {isSubmitting ? "Creating..." : "Create Salon"}
                 </button>

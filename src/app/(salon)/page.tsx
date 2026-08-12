@@ -5,24 +5,19 @@ import {
   CalendarDays,
   IndianRupee,
   Users,
-  CheckCircle2,
-  XCircle,
   Clock,
   UserCheck,
   TrendingUp,
   Scissors,
-  Sparkles,
-  ArrowUpRight,
-  MessageSquare,
   ChevronRight,
-  Filter,
-  BarChart3,
-  Plus
+  MessageSquare,
+  Plus,
+  Activity,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   getLiveBookings,
   getLiveBarbers,
-  getLiveCustomers,
   fetchSalonAnalytics,
 } from "@/lib/salonStore";
 import { SalonAnalytics, Booking, Barber } from "@/types/salon";
@@ -52,8 +47,8 @@ export default function SalonDashboardPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-9 h-9 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs text-slate-400 font-semibold">Connecting to Supabase Database...</span>
+          <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Loading workspace analytics...</span>
         </div>
       </div>
     );
@@ -61,152 +56,154 @@ export default function SalonDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top Welcome Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-rose-950/40 to-slate-900 border border-slate-800 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 space-y-1">
+      {/* Page Header (Stripe / Linear Style) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider">
-              WhatsApp-First Salon SaaS
+            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 uppercase tracking-wider">
+              WhatsApp Automation Active
             </span>
-            <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              100% Real Live Database
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Workspace
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            Salon Overview <Sparkles className="w-5 h-5 text-amber-400 fill-amber-400" />
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+            Dashboard
           </h1>
-          <p className="text-slate-400 text-xs sm:text-sm max-w-xl">
-            Live database analytics. As real clients message on WhatsApp or walk-in, real bookings & slot checks update here instantly.
+          <p className="text-slate-500 dark:text-slate-400 text-xs max-w-xl">
+            Overview of live bookings, today's revenue, active stylist stations, and customer CRM profiles.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 relative z-10">
+        <div className="flex items-center gap-3 shrink-0">
           <a
             href="/whatsapp"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all"
+            className="h-11 px-4 rounded-[10px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition flex items-center gap-2"
           >
-            <MessageSquare className="w-4 h-4" />
-            WhatsApp Logs
+            <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span>WhatsApp Inbox</span>
           </a>
           <a
             href="/bookings"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-rose-500 to-amber-500 text-white text-xs font-bold shadow-lg shadow-rose-500/25 hover:opacity-95 transition-all"
+            className="h-11 px-4 rounded-[10px] bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition flex items-center gap-2"
           >
             <CalendarDays className="w-4 h-4" />
-            View Calendar
+            <span>New Booking</span>
           </a>
         </div>
       </div>
 
-      {/* KPI Stat Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Today's Revenue */}
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all shadow-lg group">
+      {/* KPI Cards Grid (Standardized 14px Radius & Semantic Color Hierarchy) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPI 1: Revenue */}
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">Today's Revenue</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Today's Revenue</span>
+            <div className="w-9 h-9 rounded-[10px] bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200 dark:border-emerald-500/20">
               <IndianRupee className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-white">₹{analytics.todayRevenue.toLocaleString()}</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-emerald-400">
+          <div>
+            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">₹{analytics.todayRevenue.toLocaleString()}</div>
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <TrendingUp className="w-3.5 h-3.5" />
-              <span>Real Live Supabase Revenue</span>
+              <span>Real POS & WhatsApp Sales</span>
             </div>
           </div>
         </div>
 
-        {/* Card 2: Today's Bookings */}
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all shadow-lg group">
+        {/* KPI 2: Bookings */}
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">Today's Bookings</span>
-            <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Today's Bookings</span>
+            <div className="w-9 h-9 rounded-[10px] bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200 dark:border-blue-500/20">
               <CalendarDays className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-white">{analytics.todayBookingsCount} Appointments</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400 font-medium">
-              <span className="text-emerald-400 font-bold">{analytics.todayBookingsCount} Today</span>
+          <div>
+            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">{analytics.todayBookingsCount} Appointments</div>
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span className="text-blue-600 dark:text-blue-400 font-semibold">{analytics.todayBookingsCount} Scheduled</span>
               <span>•</span>
-              <span>Live Supabase Data</span>
+              <span>Live Queue</span>
             </div>
           </div>
         </div>
 
-        {/* Card 3: Active Barbers */}
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all shadow-lg group">
+        {/* KPI 3: Staff On Duty */}
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">Barbers On Duty</span>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Staff On Duty</span>
+            <div className="w-9 h-9 rounded-[10px] bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-500/20">
               <UserCheck className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-white">{analytics.activeBarbersCount} / {barbers.length} Active</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-amber-400 font-medium">
-              <span>Real Staff Profiles</span>
+          <div>
+            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">{analytics.activeBarbersCount} / {barbers.length} Active</div>
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <span>Active Stylists Station</span>
             </div>
           </div>
         </div>
 
-        {/* Card 4: Total CRM Customers */}
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all shadow-lg group">
+        {/* KPI 4: CRM Customers */}
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">WhatsApp Clients</span>
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Customers CRM</span>
+            <div className="w-9 h-9 rounded-[10px] bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center border border-sky-200 dark:border-sky-500/20">
               <Users className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-white">{analytics.activeCustomersCount} Onboarded</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-blue-400 font-medium">
-              <span>Real Supabase CRM</span>
+          <div>
+            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">{analytics.activeCustomersCount} Clients</div>
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-sky-600 dark:text-sky-400">
+              <span>WhatsApp Profile Synced</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Grid: Live Today Schedule & Performance Analytics */}
+      {/* Main Grid: Today's Schedule & Staff Status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column (2 cols): Today's Schedule Timeline */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+        {/* Left Column: Today's Schedule */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-rose-500" />
-                  Live Today Schedule Timeline
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  Today's Schedule
                 </h3>
-                <p className="text-xs text-slate-400">Real appointments created via WhatsApp Webhook or Walk-ins</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Real-time appointments created via WhatsApp or manual walk-ins</p>
               </div>
 
               <a
                 href="/bookings"
-                className="text-xs font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1"
+                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 transition"
               >
-                Full Schedule <ChevronRight className="w-3.5 h-3.5" />
+                <span>View All</span>
+                <ChevronRight className="w-4 h-4" />
               </a>
             </div>
 
             {/* Bookings List or Clean Empty State */}
             {bookings.length === 0 ? (
-              <div className="p-8 rounded-2xl bg-slate-950/60 border border-dashed border-slate-800 flex flex-col items-center justify-center text-center space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
+              <div className="py-12 px-4 rounded-[10px] bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center text-center space-y-3">
+                <div className="w-12 h-12 rounded-[10px] bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center">
                   <CalendarDays className="w-6 h-6" />
                 </div>
-                <h4 className="text-sm font-bold text-white">No Live Appointments Booked Yet</h4>
-                <p className="text-xs text-slate-400 max-w-sm">
-                  When a client sends a message on WhatsApp or you create a walk-in booking, real appointments will appear here instantly!
-                </p>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">No Appointments Scheduled Today</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mt-1">
+                    When clients book on WhatsApp or walk-in, real appointments will appear here instantly.
+                  </p>
+                </div>
                 <a
                   href="/bookings"
-                  className="px-4 py-2 rounded-xl bg-rose-500 text-white text-xs font-bold shadow-md hover:bg-rose-600 transition-all flex items-center gap-1.5"
+                  className="h-11 px-4 rounded-[10px] bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition flex items-center gap-2"
                 >
-                  <Plus className="w-4 h-4" /> Create First Booking
+                  <Plus className="w-4 h-4" /> New Booking
                 </a>
               </div>
             ) : (
@@ -214,46 +211,46 @@ export default function SalonDashboardPage() {
                 {bookings.map((b) => (
                   <div
                     key={b.id}
-                    className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    className="p-4 rounded-[10px] bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 hover:border-blue-500/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-800 text-rose-400 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                      <div className="w-11 h-11 rounded-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs shrink-0 font-mono shadow-sm">
                         {b.startTime}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-white">{b.customerName}</h4>
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white">{b.customerName}</h4>
                           <span
-                            className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                            className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-md ${
                               b.status === "confirmed"
-                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                                ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20"
                                 : b.status === "in_progress"
-                                ? "bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse"
-                                : "bg-blue-500/15 text-blue-400"
+                                ? "bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20"
+                                : "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20"
                             }`}
                           >
                             {b.status === "in_progress" ? "In Chair" : b.status}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-400 mt-1">
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
                           Services:{" "}
-                          <span className="text-slate-200 font-medium">
+                          <span className="font-semibold">
                             {(b.services ?? []).map((s) => s.serviceName).join(", ") || b.serviceName || "Haircut"}
                           </span>
                         </p>
-                        <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1">
-                          <span>Barber: <strong className="text-slate-300">{b.barberName}</strong></span>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          <span>Stylist: <strong className="text-slate-700 dark:text-slate-200">{b.barberName}</strong></span>
                           <span>•</span>
-                          <span>Duration: {b.totalDurationMinutes} mins</span>
+                          <span>{b.totalDurationMinutes} mins</span>
                           <span>•</span>
-                          <span>Code: {b.bookingCode}</span>
+                          <span className="font-mono">{b.bookingCode}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex sm:flex-col items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-800/60 pt-2 sm:pt-0">
-                      <div className="text-sm font-black text-emerald-400">₹{b.totalPrice}</div>
-                      <span className="text-[10px] text-slate-500 uppercase font-semibold">{b.source} booking</span>
+                    <div className="flex sm:flex-col items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-200 dark:border-slate-700/60 pt-2 sm:pt-0">
+                      <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{b.totalPrice}</div>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-medium">{b.source}</span>
                     </div>
                   </div>
                 ))}
@@ -262,48 +259,47 @@ export default function SalonDashboardPage() {
           </div>
         </div>
 
-        {/* Right Column (1 col): Barbers & Quick Setup */}
-        <div className="space-y-6">
-          {/* Active Barbers Card */}
-          <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+        {/* Right Column: Staff Status */}
+        <div className="space-y-4">
+          <div className="p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-amber-400" />
-                Salon Staff Status
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-amber-500" />
+                Staff Status
               </h3>
-              <a href="/barbers" className="text-xs font-bold text-rose-400 hover:text-rose-300">
+              <a href="/barbers" className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700">
                 Manage
               </a>
             </div>
 
             {barbers.length === 0 ? (
-              <div className="p-6 rounded-2xl bg-slate-950/60 border border-dashed border-slate-800 text-center space-y-2">
-                <p className="text-xs text-slate-400">No barber staff onboarded in database yet.</p>
+              <div className="py-8 px-4 rounded-[10px] bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-center space-y-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400">No staff onboarded yet.</p>
                 <a
                   href="/barbers"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-bold hover:bg-amber-500/20"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-200"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Onboard Barber
+                  <Plus className="w-4 h-4" /> Onboard Staff
                 </a>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {barbers.map((b) => (
-                  <div key={b.id} className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between">
+                  <div key={b.id} className="p-3 rounded-[10px] bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <img src={b.avatarUrl} alt="" className="w-9 h-9 rounded-xl object-cover" />
+                      <img src={b.avatarUrl} alt="" className="w-9 h-9 rounded-[8px] object-cover border border-slate-200 dark:border-slate-700" />
                       <div>
-                        <h5 className="text-xs font-bold text-white">{b.name}</h5>
-                        <span className="text-[10px] text-slate-400">{b.experienceYears} yrs exp</span>
+                        <h5 className="text-xs font-semibold text-slate-900 dark:text-white">{b.name}</h5>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">{b.experienceYears} yrs exp</span>
                       </div>
                     </div>
                     <span
-                      className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full uppercase ${
+                      className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-md uppercase ${
                         b.status === "active"
-                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                          ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20"
                           : b.status === "on_break"
-                          ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-                          : "bg-rose-500/15 text-rose-400"
+                          ? "bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
                       }`}
                     >
                       {b.status === "active" ? "On Duty" : b.status}

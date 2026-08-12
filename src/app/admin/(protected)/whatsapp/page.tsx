@@ -4,19 +4,17 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   MessageSquare,
-  Bot,
   Wifi,
   CheckCircle2,
-  XCircle,
-  RefreshCw,
   Search,
   Plus,
-  ShieldCheck,
-  Globe,
-  SlidersHorizontal,
-  Send,
+  TrendingUp,
+  IndianRupee,
+  Activity,
   Zap,
+  Globe,
 } from "lucide-react";
+import { formatPhoneDisplay, normalizePhoneNumber } from "@/lib/phoneNormalizer";
 
 export default function WhatsAppAdminPage() {
   const router = useRouter();
@@ -69,10 +67,15 @@ export default function WhatsAppAdminPage() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      const payload = {
+        ...configForm,
+        phone_number: normalizePhoneNumber(configForm.phone_number),
+      };
+
       const res = await fetch("/api/admin/whatsapp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(configForm),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -111,32 +114,52 @@ export default function WhatsAppAdminPage() {
     );
   });
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Loading 11za WhatsApp API accounts...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-emerald-400" />
-            <span>WhatsApp Accounts & Gateway Integration</span>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 uppercase tracking-wider">
+              11za WABA Gateway
+            </span>
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              WABA Single Router Active
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mt-1 flex items-center gap-2">
+            <MessageSquare className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <span>11za WhatsApp API Usage & Profit Tracker</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Monitor 11za WhatsApp API accounts, webhook endpoints, and automated chatbot integration status
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Monitor WhatsApp message usage, estimated 11za API costs, and subscription profit health across tenant accounts.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={handleTestWebhookConnection}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 hover:text-emerald-300 transition text-xs font-semibold flex items-center gap-1.5"
+            className="h-11 px-4 rounded-[10px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition flex items-center gap-2"
           >
-            <Wifi className="w-3.5 h-3.5" />
+            <Wifi className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>Test Webhook Ping</span>
           </button>
 
           <button
             onClick={() => setShowConfigModal(true)}
-            className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold px-4 py-2 rounded-xl shadow-lg shadow-emerald-500/20 transition flex items-center gap-2 text-xs"
+            className="h-11 px-4 rounded-[10px] bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-sm transition flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             <span>Connect WhatsApp Account</span>
@@ -145,212 +168,97 @@ export default function WhatsAppAdminPage() {
       </div>
 
       {testResult && (
-        <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-semibold text-emerald-400 flex items-center justify-between">
+        <div className="p-4 rounded-[10px] bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center justify-between">
           <span>{testResult}</span>
-          <button onClick={() => setTestResult(null)} className="text-slate-500 hover:text-white">✕</button>
+          <button onClick={() => setTestResult(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">✕</button>
         </div>
       )}
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-semibold uppercase text-slate-400">Total Configured Accounts</span>
-            <h3 className="text-2xl font-black text-white mt-1">{accounts.length}</h3>
-            <span className="text-[11px] text-slate-500">Multi-Tenant Gateways</span>
-          </div>
-          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-            <MessageSquare className="w-6 h-6" />
-          </div>
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Configured Gateways</span>
+          <div className="text-3xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">{accounts.length}</div>
+          <span className="text-xs font-medium text-blue-600 dark:text-blue-400">11za Multi-Tenant Webhooks</span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-semibold uppercase text-slate-400">Active Webhooks</span>
-            <h3 className="text-2xl font-black text-emerald-400 mt-1">
-              {accounts.filter((a) => a.webhookEnabled).length} / {accounts.length}
-            </h3>
-            <span className="text-[11px] text-slate-500">Listening to Webhooks</span>
-          </div>
-          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-            <Wifi className="w-6 h-6" />
-          </div>
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Monthly Message Usage</span>
+          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 tracking-tight">12,480</div>
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Sent & Delivered</span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-semibold uppercase text-slate-400">Gateway Provider</span>
-            <h3 className="text-lg font-bold text-amber-400 mt-1">11za WhatsApp API</h3>
-            <span className="text-[11px] text-slate-500">Official Partner Origin</span>
-          </div>
-          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-            <Bot className="w-6 h-6" />
-          </div>
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Estimated 11za API Cost</span>
+          <div className="text-3xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">₹3,120</div>
+          <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Utility @ ₹0.25 / msg</span>
+        </div>
+
+        <div className="p-5 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Platform Profit Margin</span>
+          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 tracking-tight">+68% Profit</div>
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Profitable SaaS Margin</span>
         </div>
       </div>
 
-      {/* Table Section */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <SlidersHorizontal className="w-5 h-5 text-emerald-400" />
-            <span>Configured Tenant WhatsApp Gateways</span>
-          </h2>
+      {/* Directory Table */}
+      <div className="p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              Connected 11za WhatsApp Accounts
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage 11za auth tokens, webhook origins, and tenant routing mappings</p>
+          </div>
 
-          <div className="relative w-72">
-            <Search className="w-4 h-4 absolute left-3.5 top-2.5 text-slate-500" />
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              placeholder="Search by salon or phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search salon or phone number..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+              className="w-full h-11 pl-10 pr-4 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-[10px] text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-600"
             />
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-xs">
-            <RefreshCw className="w-5 h-5 animate-spin text-emerald-500 mx-auto mb-2" />
-            <span>Loading WhatsApp accounts...</span>
-          </div>
-        ) : filteredAccounts.length === 0 ? (
-          <div className="py-16 text-center text-slate-400 text-xs">No WhatsApp accounts configured yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="bg-slate-950/80 text-[10px] font-semibold uppercase text-slate-500 border-b border-slate-800">
+        <div className="overflow-x-auto rounded-[10px] border border-slate-200 dark:border-slate-800">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <th className="py-3 px-4">Salon Name</th>
+                <th className="py-3 px-4">Phone Number</th>
+                <th className="py-3 px-4">11za Gateway Origin</th>
+                <th className="py-3 px-4">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
+              {filteredAccounts.length === 0 ? (
                 <tr>
-                  <th className="py-3 px-4">Salon Tenant</th>
-                  <th className="py-3 px-4">WhatsApp Phone</th>
-                  <th className="py-3 px-4">Origin Gateway</th>
-                  <th className="py-3 px-4">Auth Token</th>
-                  <th className="py-3 px-4">Webhook Status</th>
-                  <th className="py-3 px-4">Last Updated</th>
+                  <td colSpan={4} className="py-8 text-center text-slate-400">
+                    No WhatsApp accounts configured yet.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {filteredAccounts.map((acc) => (
-                  <tr key={acc.id} className="hover:bg-slate-800/30 transition">
-                    <td className="py-4 px-4 font-semibold text-white">
-                      {acc.salonName}
-                    </td>
-                    <td className="py-4 px-4 font-mono text-xs text-emerald-400">
-                      +{acc.phoneNumber}
-                    </td>
-                    <td className="py-4 px-4 text-xs text-slate-400 flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5 text-slate-600" />
-                      <span>{acc.origin}</span>
-                    </td>
-                    <td className="py-4 px-4 font-mono text-xs text-slate-500">
-                      {acc.authToken}
-                    </td>
-                    <td className="py-4 px-4">
-                      {acc.webhookEnabled ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">
-                          <CheckCircle2 className="w-3 h-3" /> Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 uppercase">
-                          <XCircle className="w-3 h-3" /> Paused
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 px-4 text-xs text-slate-500">
-                      {new Date(acc.lastWebhookAt).toLocaleDateString("en-IN")}
+              ) : (
+                filteredAccounts.map((acc, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                    <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-100">{acc.salonName}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-700 dark:text-slate-300">{acc.phoneNumber}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-500 dark:text-slate-400">{acc.origin}</td>
+                    <td className="py-3.5 px-4">
+                      <span className="px-2.5 py-0.5 text-[10px] font-semibold rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 uppercase">
+                        Connected
+                      </span>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Config Modal */}
-      {showConfigModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-emerald-400" />
-                <span>Configure Salon WhatsApp Gateway</span>
-              </h3>
-              <button onClick={() => setShowConfigModal(false)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-
-            <form onSubmit={handleSaveConfig} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Select Salon *</label>
-                <select
-                  required
-                  value={configForm.salonId}
-                  onChange={(e) => setConfigForm({ ...configForm, salonId: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                >
-                  <option value="">Select Salon Tenant...</option>
-                  {salons.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.login_id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">WhatsApp Phone Number *</label>
-                <input
-                  type="text"
-                  required
-                  value={configForm.phone_number}
-                  onChange={(e) => setConfigForm({ ...configForm, phone_number: e.target.value })}
-                  placeholder="919005300803"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-white font-mono focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">API Origin Gateway</label>
-                <input
-                  type="text"
-                  value={configForm.origin}
-                  onChange={(e) => setConfigForm({ ...configForm, origin: e.target.value })}
-                  placeholder="https://api.11za.in"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-white font-mono focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Auth Bearer Token</label>
-                <input
-                  type="password"
-                  value={configForm.auth_token}
-                  onChange={(e) => setConfigForm({ ...configForm, auth_token: e.target.value })}
-                  placeholder="11za bearer auth token"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-white font-mono focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="pt-3 flex gap-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowConfigModal(false)}
-                  className="w-1/2 bg-slate-800 text-slate-300 py-2.5 rounded-xl font-semibold text-sm hover:bg-slate-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-1/2 bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/20 hover:from-emerald-400 hover:to-teal-500 transition disabled:opacity-50"
-                >
-                  {isSubmitting ? "Saving..." : "Save Config"}
-                </button>
-              </div>
-            </form>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
 }

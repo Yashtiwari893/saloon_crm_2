@@ -6,12 +6,9 @@ import {
   Settings,
   ShieldCheck,
   Globe,
-  Lock,
   Save,
   RefreshCw,
   CheckCircle2,
-  Sliders,
-  Bot,
 } from "lucide-react";
 
 export default function SettingsAdminPage() {
@@ -61,7 +58,7 @@ export default function SettingsAdminPage() {
       const res = await fetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify({ settings }),
       });
       const data = await res.json();
       setIsSaving(false);
@@ -75,135 +72,116 @@ export default function SettingsAdminPage() {
     }
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Loading platform configuration...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Settings className="w-5 h-5 text-amber-400" />
-            <span>Platform Global Configurations & Security</span>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 uppercase tracking-wider">
+              System Configuration
+            </span>
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Global Settings
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2 mt-1">
+            <Settings className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <span>Platform Global Settings</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Configure system-wide settings, default gateway parameters, and security policies
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Configure global SaaS defaults, 11za gateway origins, session max ages, and maintenance modes.
           </p>
         </div>
 
         <button
-          onClick={fetchSettings}
-          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold self-start md:self-auto"
+          onClick={handleSaveSettings}
+          disabled={isSaving}
+          className="h-11 px-5 rounded-[10px] bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          <span>Reload Configs</span>
+          <Save className="w-4 h-4" />
+          <span>{isSaving ? "Saving..." : "Save Settings"}</span>
         </button>
       </div>
 
       {saveSuccess && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>System configurations saved successfully!</span>
+        <div className="p-4 rounded-[10px] bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" /> Platform settings updated successfully!
         </div>
       )}
 
-      {/* Main Settings Form */}
-      <form onSubmit={handleSaveSettings} className="space-y-6">
-        {/* Section 1: Platform Info */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-          <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-            <Globe className="w-5 h-5 text-amber-400" />
-            <span>Platform Branding & General Settings</span>
-          </h2>
+      {/* Form Container */}
+      <form onSubmit={handleSaveSettings} className="p-6 rounded-[14px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6 text-xs">
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white pb-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+            <Globe className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Platform Defaults
+          </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Platform Title</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Platform Brand Name</label>
               <input
                 type="text"
-                value={settings.platformName}
+                value={settings.platformName || ""}
                 onChange={(e) => setSettings({ ...settings, platformName: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none"
+                className="w-full h-11 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] px-3.5 text-slate-900 dark:text-white focus:outline-none focus:border-blue-600"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Support Email</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Support Email</label>
               <input
                 type="email"
-                value={settings.supportEmail}
+                value={settings.supportEmail || ""}
                 onChange={(e) => setSettings({ ...settings, supportEmail: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none"
+                className="w-full h-11 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] px-3.5 text-slate-900 dark:text-white focus:outline-none focus:border-blue-600"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Default Currency</label>
-              <select
-                value={settings.defaultCurrency}
-                onChange={(e) => setSettings({ ...settings, defaultCurrency: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none"
-              >
-                <option value="INR">INR (₹)</option>
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Default Slot Interval</label>
-              <select
-                value={settings.defaultSlotInterval}
-                onChange={(e) => setSettings({ ...settings, defaultSlotInterval: Number(e.target.value) })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none"
-              >
-                <option value={15}>15 Minutes</option>
-                <option value={30}>30 Minutes</option>
-                <option value={60}>60 Minutes</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Section 2: Gateway & Integration */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-          <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-            <Bot className="w-5 h-5 text-amber-400" />
-            <span>Default WhatsApp & AI Model Configuration</span>
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">11za WhatsApp API Gateway</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">11za Gateway Origin</label>
               <input
                 type="text"
-                value={settings.gatewayOrigin}
+                value={settings.gatewayOrigin || ""}
                 onChange={(e) => setSettings({ ...settings, gatewayOrigin: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white font-mono focus:border-amber-500 focus:outline-none"
+                className="w-full h-11 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] px-3.5 text-slate-900 dark:text-white font-mono focus:outline-none focus:border-blue-600"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">Session Expiry (Days)</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Default Slot Interval (mins)</label>
               <input
                 type="number"
-                value={settings.sessionMaxAgeDays}
-                onChange={(e) => setSettings({ ...settings, sessionMaxAgeDays: Number(e.target.value) })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none"
+                value={settings.defaultSlotInterval || 15}
+                onChange={(e) => setSettings({ ...settings, defaultSlotInterval: Number(e.target.value) })}
+                className="w-full h-11 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] px-3.5 text-slate-900 dark:text-white focus:outline-none focus:border-blue-600"
               />
             </div>
           </div>
         </div>
 
-        {/* Submit */}
-        <div className="flex justify-end">
+        <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-end">
           <button
             type="submit"
             disabled={isSaving}
-            className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold px-6 py-3 rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-2 text-sm disabled:opacity-50"
+            className="h-11 px-5 rounded-[10px] bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
-            <span>{isSaving ? "Saving Configs..." : "Save System Settings"}</span>
+            <span>{isSaving ? "Saving..." : "Save Settings"}</span>
           </button>
         </div>
       </form>

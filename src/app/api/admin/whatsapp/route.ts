@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/authSession";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { normalizePhoneNumber } from "@/lib/phoneNormalizer";
 
 export async function GET(req: Request) {
   try {
@@ -9,23 +10,31 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized. Super Admin role required." }, { status: 403 });
     }
 
-    const { data: mappings, error } = await supabaseAdmin
+    // 1. Fetch phone mappings
+    const { data: mappings, error: mapErr } = await supabaseAdmin
       .from("phone_document_mapping")
-      .select("*, salons(name, slug, is_active)")
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) throw error;
+    if (mapErr) throw mapErr;
 
-    const formattedMappings = (mappings || []).map((m: any) => ({
-      id: m.id,
-      salonId: m.salon_id,
-      salonName: m.salons?.name || "Unassigned Salon",
-      phoneNumber: m.phone_number,
-      origin: m.origin || "https://api.11za.in",
-      authToken: m.auth_token ? "••••••••" + m.auth_token.slice(-4) : "Not Configured",
-      webhookEnabled: m.webhook_enabled ?? true,
-      lastWebhookAt: m.updated_at || m.created_at,
-    }));
+    // 2. Fetch salons to safely map salon names without relying on database FK constraints
+    const { data: salons } = await supabaseAdmin.from("salons").select("id, name, slug, is_active");
+    const salonMap = new Map((salons || []).map((s: any) => [s.id, s]));
+
+    const formattedMappings = (mappings || []).map((m: any) => {
+      const salon = m.salon_id ? salonMap.get(m.salon_id) : null;
+      return {
+        id: m.id,
+        salonId: m.salon_id,
+        salonName: salon?.name || "Global Webhook Gateway",
+        phoneNumber: m.phone_number,
+        origin: m.origin || "https://api.11za.in",
+        authToken: m.auth_token ? "••••••••" + (m.auth_token.length > 4 ? m.auth_token.slice(-4) : m.auth_token) : "Not Configured",
+        webhook_enabled: m.webhook_enabled ?? true,
+        lastWebhookAt: m.updated_at || m.created_at,
+      };
+    });
 
     return NextResponse.json({ success: true, accounts: formattedMappings });
   } catch (err: any) {
@@ -46,7 +55,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Salon ID and Phone Number are required" }, { status: 400 });
     }
 
-    const cleanPhone = phone_number.replace(/\D/g, "");
+    const cleanPhone = normalizePhoneNumber(phone_number);
 
     const { data: updated, error } = await supabaseAdmin
       .from("phone_document_mapping")

@@ -1,15 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { embedText } from "@/lib/embeddings";
-import { retrieveRelevantChunksForPhoneNumber } from "@/lib/retrieval";
 import { sendWhatsAppMessage } from "@/lib/whatsappSender";
-import { logHeader, logStep, logAiGeneration, logError } from "@/lib/logger";
-
-import {
-  loadConversationMemory,
-  saveConversationMemory,
-  ConversationMemory,
-} from "@/lib/conversationMemory";
-
+import { logHeader, logStep, logError } from "@/lib/logger";
+import { resolveSalonContextForIncomingMessage, upsertWhatsAppSession } from "@/lib/salonResolver";
+import { getWhatsAppSession, updateWhatsAppSessionStep } from "@/lib/whatsappStateMachine";
+import { loadConversationMemory, saveConversationMemory } from "@/lib/conversationMemory";
 import { parseUserMessageNlu } from "@/lib/nluEngine";
 import { processStateMachineStep } from "@/lib/conversationStateMachine";
 
@@ -47,89 +41,93 @@ export async function handleSalonAutoResponse(
 ): Promise<AutoResponseResult> {
   const startTime = Date.now();
   try {
-    logHeader(`SALON AI CONVERSATION ENGINE EXECUTING`);
+    logHeader(`OPTION D HYBRID SALON AUTO-RESPONDER EXECUTING`);
     logStep("AUTO_RESPONDER_INPUT", { messageId, fromNumber, toNumber, messageText, senderName });
 
     if (await hasExistingAutoResponse(messageId)) {
       logStep("DUPLICATE_CHECK", `MessageId ${messageId} already responded. Skipping.`);
-      await supabaseAdmin
-        .from("whatsapp_messages")
-        .update({
-          auto_respond_sent: true,
-          response_sent_at: new Date().toISOString(),
-        })
-        .eq("message_id", messageId);
-
-      return {
-        success: true,
-        duplicate: true,
-        sent: false,
-        response: "",
-      };
+      return { success: true, duplicate: true, sent: false, response: "" };
     }
 
-    // 1. Fetch Credentials & Tenant Salon ID for 11za WhatsApp API & Gemini AI
-    const mappingResult = await supabaseAdmin
-      .from("phone_document_mapping")
-      .select("salon_id, system_prompt, auth_token, origin, gemini_api_key, groq_api_key, mistral_api_key")
-      .eq("phone_number", toNumber)
-      .maybeSingle();
+    // 1. Execute Option D 4-Layer Salon Resolution Engine
+    const resolution = await resolveSalonContextForIncomingMessage(fromNumber, messageText);
+    logStep("SALON_RESOLUTION_RESULT", resolution);
 
-    const phoneMapping = mappingResult.data || {
-      salon_id: undefined,
-      auth_token: process.env.WHATSAPP_AUTH_TOKEN || "demo-token",
-      origin: process.env.WHATSAPP_ORIGIN || "https://api.11za.in",
-      system_prompt: "",
-      gemini_api_key: process.env.GEMINI_API_KEY || "",
-      groq_api_key: process.env.GROQ_API_KEY || "",
-      mistral_api_key: process.env.MISTRAL_API_KEY || "",
-    };
+    let activeSalonId = resolution.salonId;
+    let replyText = "";
 
-    const targetSalonId = phoneMapping.salon_id || undefined;
-    const authToken = phoneMapping.auth_token || process.env.WHATSAPP_AUTH_TOKEN || "";
-    const originWebsite = phoneMapping.origin || process.env.WHATSAPP_ORIGIN || "https://api.11za.in";
-    const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
+    // Handle Fallback Options if Salon Context is not yet resolved
+    if (!activeSalonId && (resolution.resolutionType === "MULTI_MATCH_FALLBACK" || resolution.resolutionType === "NO_MATCH_FALLBACK")) {
+      const salons = resolution.matchedSalons || [];
+      if (salons.length > 0) {
+        const salonListStr = salons.map((s, idx) => `${idx + 1}️⃣ *${s.name}* (Ref: ${s.slug})`).join("\n");
+        replyText = `Welcome to Inwante Salon Network 👋\n\nPlease select your salon by replying with its number or slug:\n\n${salonListStr}`;
+      } else {
+        replyText = `Welcome to Inwante Salon Network 👋\n\nPlease scan your salon's QR code or ask reception for their WhatsApp booking link!`;
+      }
+    } else {
+      // 2. Fetch Phone Mapping Credentials & Tenant Config for activeSalonId
+      let phoneMapping: any = null;
+      if (activeSalonId) {
+        const mappingRes = await supabaseAdmin
+          .from("phone_document_mapping")
+          .select("salon_id, system_prompt, auth_token, origin, gemini_api_key")
+          .eq("salon_id", activeSalonId)
+          .maybeSingle();
+        phoneMapping = mappingRes.data;
+      }
 
-    // 2. Persistent Memory Architecture: Load Customer Context & Active Booking Draft for targetSalonId
-    const memory = await loadConversationMemory(fromNumber, toNumber, senderName, targetSalonId);
+      if (!phoneMapping) {
+        const fallbackRes = await supabaseAdmin
+          .from("phone_document_mapping")
+          .select("salon_id, system_prompt, auth_token, origin, gemini_api_key")
+          .eq("phone_number", toNumber)
+          .maybeSingle();
+        phoneMapping = fallbackRes.data;
+      }
 
-    // 3. NLU Intent & Entity Extraction
-    const nluResult = await parseUserMessageNlu(
-      messageText,
-      memory.activeFlow,
-      memory.currentStep,
-      geminiKey
-    );
+      const authToken = phoneMapping?.auth_token || process.env.WHATSAPP_AUTH_TOKEN || "demo-token";
+      const originWebsite = phoneMapping?.origin || process.env.WHATSAPP_ORIGIN || "https://api.11za.in";
+      const geminiKey = phoneMapping?.gemini_api_key || process.env.GEMINI_API_KEY;
 
-    // 4. Conversation State Machine Execution
-    const stateResult = await processStateMachineStep(memory, messageText, nluResult);
-    const replyText = stateResult.replyText;
+      // 3. Persistent Memory Architecture
+      const memory = await loadConversationMemory(fromNumber, toNumber, senderName || resolution.customerName || undefined, activeSalonId || undefined);
 
-    // 5. Update Memory Records with Last Interaction
-    stateResult.nextMemory.lastUserMessage = messageText;
-    stateResult.nextMemory.lastBotMessage = replyText;
-    if (targetSalonId) {
-      stateResult.nextMemory.salonId = targetSalonId;
+      // 4. NLU Intent Parsing
+      const nluResult = await parseUserMessageNlu(messageText, memory.activeFlow, memory.currentStep, geminiKey);
+
+      // 5. Execute Conversation State Machine
+      const stateResult = await processStateMachineStep(memory, messageText, nluResult);
+      replyText = stateResult.replyText;
+
+      // 6. Update Memory & 24h Session Record
+      stateResult.nextMemory.lastUserMessage = messageText;
+      stateResult.nextMemory.lastBotMessage = replyText;
+      if (activeSalonId) {
+        stateResult.nextMemory.salonId = activeSalonId;
+        await upsertWhatsAppSession(fromNumber, activeSalonId, memory.currentStep);
+      }
+      await saveConversationMemory(stateResult.nextMemory);
     }
-    await saveConversationMemory(stateResult.nextMemory);
 
-    // 6. Send WhatsApp Response via 11za Official API
+    // 7. Send Response via 11za Official API
+    const authToken = process.env.WHATSAPP_AUTH_TOKEN || "demo-token";
+    const originWebsite = process.env.WHATSAPP_ORIGIN || "https://api.11za.in";
+
     let sendStatus = false;
-    if (authToken && originWebsite && replyText) {
-      logStep("SENDING_WHATSAPP_REPLY_VIA_11ZA", { to: fromNumber, responseLength: replyText.length, salonId: targetSalonId });
+    if (replyText) {
+      logStep("SENDING_WHATSAPP_REPLY", { to: fromNumber, responseLength: replyText.length, salonId: activeSalonId });
       const sendRes = await sendWhatsAppMessage(fromNumber, replyText, authToken, originWebsite);
       sendStatus = sendRes.success;
-    } else {
-      logError("WhatsApp Send Skipped", { authTokenPresent: Boolean(authToken), originWebsite, replyTextPresent: Boolean(replyText) });
     }
 
-    // 7. Mark Message as Responded in Supabase & Attach salon_id
+    // 8. Mark Message as Responded in Supabase & Attach salon_id
     const updateRecord: any = {
       auto_respond_sent: true,
       response_sent_at: new Date().toISOString(),
     };
-    if (targetSalonId) {
-      updateRecord.salon_id = targetSalonId;
+    if (activeSalonId) {
+      updateRecord.salon_id = activeSalonId;
     }
 
     await supabaseAdmin
@@ -145,5 +143,4 @@ export async function handleSalonAutoResponse(
   }
 }
 
-// Alias export for backward compatibility with routes
 export { handleSalonAutoResponse as generateAutoResponse };
